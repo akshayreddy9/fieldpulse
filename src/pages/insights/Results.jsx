@@ -7,8 +7,11 @@ import { applyFilters, frequency } from '../../lib/analytics.js';
 import { allQuestions } from '../../data/questionnaire.js';
 import { GEO } from '../../data/geo.js';
 import { exportResultsExcel } from '../../lib/exporters.js';
+import { R, AGE_BANDS, questionFor } from '../../lib/roles.js';
 
 export function Filters({ f, setF, compact }) {
+  const genderQ = questionFor('gender');
+  const casteQ = questionFor('caste');
   const mandals = GEO.mandals.filter((m) => !f.constituency || m.constituencyId === f.constituency);
   const set = (k, v) => setF({ ...f, [k]: v || undefined, ...(k === 'constituency' ? { mandal: undefined } : {}) });
   const active = Object.values(f).filter(Boolean).length;
@@ -17,9 +20,10 @@ export function Filters({ f, setF, compact }) {
       {!compact && <SlidersHorizontal size={15} className="muted" />}
       <select className="select" style={{ width: 160 }} value={f.constituency || ''} onChange={(e) => set('constituency', e.target.value)}><option value="">All constituencies</option>{GEO.constituencies.map((c) => <option key={c.id} value={c.id}>{c.name.en}</option>)}</select>
       <select className="select" style={{ width: 160 }} value={f.mandal || ''} onChange={(e) => set('mandal', e.target.value)}><option value="">All mandals</option>{mandals.map((m) => <option key={m.id} value={m.id}>{m.name.en}</option>)}</select>
-      <select className="select" style={{ width: 120 }} value={f.gender || ''} onChange={(e) => set('gender', e.target.value)}><option value="">All genders</option><option>Male</option><option>Female</option></select>
-      <select className="select" style={{ width: 120 }} value={f.ageBand || ''} onChange={(e) => set('ageBand', e.target.value)}><option value="">All ages</option>{['18-25', '26-35', '36-50', '51+'].map((a) => <option key={a}>{a}</option>)}</select>
-      <select className="select" style={{ width: 130 }} value={f.caste || ''} onChange={(e) => set('caste', e.target.value)}><option value="">All castes</option>{['SC', 'ST', 'BC', 'OC', 'Minority'].map((a) => <option key={a}>{a}</option>)}</select>
+      {/* Profile filters come from the questions marked Gender / Age / Caste in the builder */}
+      {genderQ && <select className="select" style={{ width: 120 }} value={f.gender || ''} onChange={(e) => set('gender', e.target.value)}><option value="">All genders</option>{genderQ.options.map((o) => <option key={o.v} value={o.v}>{o.en}</option>)}</select>}
+      {R('age') && <select className="select" style={{ width: 120 }} value={f.ageBand || ''} onChange={(e) => set('ageBand', e.target.value)}><option value="">All ages</option>{AGE_BANDS.map((a) => <option key={a}>{a}</option>)}</select>}
+      {casteQ && <select className="select" style={{ width: 130 }} value={f.caste || ''} onChange={(e) => set('caste', e.target.value)}><option value="">All castes</option>{casteQ.options.map((o) => <option key={o.v} value={o.v}>{o.en}</option>)}</select>}
       {active > 0 && <button className="btn ghost sm" onClick={() => setF({})}><X size={14} />Clear</button>}
     </div>
   );

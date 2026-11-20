@@ -13,8 +13,10 @@ import { codeFor } from '../src/lib/privacy.js';
 import { generateInterviews } from '../src/data/generate.js';
 import { generateReport } from '../src/lib/reportGen.js';
 import { frequency, crosstab, applyFilters } from '../src/lib/analytics.js';
-import { BOOTH_BY_ID } from '../src/data/geo.js';
+import { BOOTH_BY_ID, setGeo, validateGeo } from '../src/data/geo.js';
 import { findQuestion, SAMPLE_QUESTIONNAIRE } from '../src/data/questionnaire.js';
+import { piiQuestions, piiKind, R } from '../src/lib/roles.js';
+import { mainQuestionId } from '../src/lib/reportGen.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const APK = path.join(here, '..', 'MSR-Pulse.apk');
@@ -30,6 +32,8 @@ function blankQuestionnaire() {
 
 export function createApp({ dbFile = process.env.DB_FILE || path.join(here, '..', 'data', 'msr-pulse.db') } = {}) {
   const db = openDb(dbFile);
+  // Booth list: the uploaded one (kv "geo"), else the sample list on test sites; production starts empty
+  setGeo(getKv(db, 'geo'));
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '8mb' }));
@@ -93,8 +97,20 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
   // ---------- caches ----------
   const qualityCache = new Map();
   const round3 = (sid) => listInterviews(db, 3, sid);
-  const quality = (sid) => { if (!qualityCache.has(sid)) qualityCache.set(sid, assessAll(round3(sid))); return qualityCache.get(sid); };
-  const invalidate = (sid) => { if (sid) qualityCache.delete(sid); else qualityCache.clear(); };
+  // Each survey is checked with its own questionnaire (its duplicate-answer and grid questions)
+  const qnOf = (sid) => getS(db, sid, 'questionnaire') || SAMPLE_QUESTIONNAIRE;
+  const quality = (sid) => { if (!qualityCache.has(sid)) qualityCache.set(sid, assessAll(round3(sid), qnOf(sid))); return qualityCache.get(sid); };
+  const invalidate = (sid) => { if (sid) qualityCache.delete(sid); else qualityCache.clear(); piiCache.clear(); };
+  // Personal-detail questions per survey: those marked private, plus the name/mobile roles, plus the starter ids
+  const piiCache = new Map();
+  const piiOf = (sid) => {
+    if (!piiCache.has(sid)) {
+      const qn = qnOf(sid);
+      const ids = new Set([...piiQuestions(qn), 'q_name', 'q_phone']);
+      piiCache.set(sid, { ids: [...ids], kind: (id) => piiKind(qn, id), photos: (qn.groups || []).flatMap((g) => g.questions).filter((q) => q.type === 'photo').map((q) => q.id).concat('q_photo') });
+    }
+    return piiCache.get(sid);
+  };
 
   // ---------- helpers ----------
   const perms = () => getKv(db, 'permissions');
@@ -118,9 +134,9 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
     const mask = getKv(db, 'privacyLock') || user.role === 'client' || user.role === 'surveyor' && i.surveyorId !== user.surveyorId;
     if (!mask) return i;
     const a = { ...i.answers };
-    if (a.q_name) a.q_name = codeFor(a.q_name, 'name');
-    if (a.q_phone) a.q_phone = codeFor(a.q_phone, 'phone');
-    if (typeof a.q_photo === 'string') a.q_photo = true;
+    const p = piiOf(i.surveyId || FIRST_SURVEY);
+    p.ids.forEach((id) => { if (a[id] !== undefined && a[id] !== '') a[id] = codeFor(a[id], p.kind(id)); });
+    p.photos.forEach((id) => { if (typeof a[id] === 'string') a[id] = true; });
     return { ...i, answers: a, piiMasked: true };
   };
   const visible = (i, user) => user.role !== 'surveyor' || i.surveyorId === user.surveyorId;
@@ -243,6 +259,11 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
     if (perSurvey && !sv) return undefined;
     let value = req.body?.value;
     if (req.params.key === 'permissions' && !value?.admin?.['admin.access']) return res.status(400).json({ error: 'Admins must keep access control' });
+    if (req.params.key === 'geo') {
+      const problem = validateGeo(value);
+      if (problem) return res.status(400).json({ error: problem });
+      if (value === null && getKv(db, 'installMode') === 'production') return res.status(400).json({ error: 'A production site cannot go back to the sample booth list' });
+    }
     const current = perSurvey ? getS(db, sv.id, req.params.key) : getKv(db, req.params.key);
     if (rule.merge) value = { ...(current || {}), ...(value || {}) };
     if (perSurvey) setS(db, sv.id, req.params.key, value); else setKv(db, req.params.key, value);
@@ -263,7 +284,12 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
         if (!prev || prev.status !== x.status || oldPhone !== phone) setActive.run(x.status === 'Inactive' ? 0 : 1, phone);
       });
     }
-    if (['statuses', 'notes'].includes(req.params.key)) invalidate(sv?.id);
+    if (['statuses', 'notes', 'questionnaire'].includes(req.params.key)) invalidate(sv?.id);
+    if (req.params.key === 'geo') {
+      setGeo(value);
+      invalidate();
+      audit(req.user.name, value ? `Loaded booth list: ${value.constituencies.length} constituencies, ${value.mandals.length} mandals, ${value.booths.length} booths` : 'Switched to the sample booth list');
+    }
     broadcast('state', { key: req.params.key, value, by: req.user.name, survey: sv?.id || null }, (u) => u.phone !== req.user.phone && (!READABLE[u.role] || READABLE[u.role].includes(req.params.key)));
     return res.json({ ok: true });
   });
@@ -283,6 +309,7 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
     const clean = [];
     for (const i of list) {
       const booth = BOOTH_BY_ID[i?.boothId];
+      if (i?.id && i.boothId && !booth) return res.status(400).json({ error: `Interview ${i.id}: booth ${i.boothId} is not in the booth list` });
       if (!i?.id || !booth || !i.answers || typeof i.startedAt !== 'number' || !i.gps) return res.status(400).json({ error: `Interview ${i?.id || '?'} is incomplete` });
       if (!i.consent?.agreed) return res.status(400).json({ error: `Interview ${i.id} has no recorded consent` });
       const sv = getSurvey(db, i.surveyId || FIRST_SURVEY);
@@ -307,13 +334,18 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
   });
 
   app.post('/api/pii/reveal', auth, need('pii.reveal'), (req, res) => {
-    const { interviewId, field, reason } = req.body || {};
+    const { interviewId, field, question, reason } = req.body || {};
     if (!reason || String(reason).trim().length < 3) return res.status(400).json({ error: 'A reason is required' });
-    const row = db.prepare('SELECT data FROM interviews WHERE id = ?').get(interviewId);
+    const row = db.prepare('SELECT data, survey_id FROM interviews WHERE id = ?').get(interviewId);
     if (!row) return res.status(404).json({ error: 'Interview not found' });
     const i = JSON.parse(row.data);
-    const key = field === 'phone' ? 'q_phone' : 'q_name';
-    const entry = { t: Date.now(), who: req.user.name, role: req.user.role, interviewId, field: field === 'phone' ? 'Mobile number' : 'Respondent name', reason: String(reason).slice(0, 300) };
+    const qn = qnOf(row.survey_id);
+    // Only personal-detail questions can be revealed this way; default to the survey's name / mobile question
+    const p = piiOf(row.survey_id);
+    const key = question ? String(question) : (field === 'phone' ? (R('phone', qn) || 'q_phone') : (R('name', qn) || 'q_name'));
+    if (!p.ids.includes(key)) return res.status(400).json({ error: 'That is not a personal-detail question' });
+    const label = findQuestion(qn, key)?.label.en || (p.kind(key) === 'phone' ? 'Mobile number' : 'Respondent name');
+    const entry = { t: Date.now(), who: req.user.name, role: req.user.role, interviewId, field: label.slice(0, 80), reason: String(reason).slice(0, 300) };
     db.prepare('INSERT INTO access_log (t, who, role, interview_id, field, reason) VALUES (?,?,?,?,?,?)').run(entry.t, entry.who, entry.role, entry.interviewId, entry.field, entry.reason);
     broadcast('access', entry, (u) => u.role === 'admin');
     res.json({ value: i.answers[key] || '', entry });
@@ -409,6 +441,7 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admins only' });
     if (!demoMode() || getKv(db, 'installMode') === 'production') return res.status(403).json({ error: 'Reset is only available on demo sites' });
     seed(db);
+    setGeo(getKv(db, 'geo'));
     invalidate();
     broadcast('reset', {});
     res.json({ ok: true });
@@ -429,16 +462,16 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
   function runRetention(by = 'System (scheduled)') {
     const days = Number(getKv(db, 'retentionDays') || 180);
     const cutoff = Date.now() - days * 86400000;
-    const rows = db.prepare('SELECT id, data FROM interviews WHERE started_at < ?').all(cutoff);
+    const rows = db.prepare('SELECT id, data, survey_id FROM interviews WHERE started_at < ?').all(cutoff);
     const upd = db.prepare('UPDATE interviews SET data = ? WHERE id = ?');
     let erased = 0;
     db.exec('BEGIN');
     rows.forEach((r) => {
       const i = JSON.parse(r.data);
-      if (!i.answers.q_name && !i.answers.q_phone && i.piiErased) return;
-      delete i.answers.q_name;
-      delete i.answers.q_phone;
-      if (typeof i.answers.q_photo === 'string') i.answers.q_photo = true;
+      const p = piiOf(r.survey_id);
+      if (i.piiErased && !p.ids.some((id) => i.answers[id] !== undefined) && !p.photos.some((id) => typeof i.answers[id] === 'string')) return;
+      p.ids.forEach((id) => { delete i.answers[id]; });
+      p.photos.forEach((id) => { if (typeof i.answers[id] === 'string') i.answers[id] = true; });
       i.piiErased = new Date().toISOString().slice(0, 10);
       upd.run(JSON.stringify(i), r.id);
       erased++;
@@ -474,9 +507,9 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
     const sv = getSurvey(db, req.params.sid);
     if (!sv) return res.status(404).json({ error: 'Unknown survey' });
     const qn = getS(db, sv.id, 'questionnaire');
-    const qid = req.query.question || 'q_vote_intent';
-    const q = findQuestion(qn, qid);
-    if (!q || q.pii) return res.status(404).json({ error: 'Unknown question' });
+    const qid = req.query.question || mainQuestionId(qn);
+    const q = qid && findQuestion(qn, qid);
+    if (!q || piiOf(sv.id).ids.includes(qid)) return res.status(404).json({ error: 'Unknown question' });
     const level = ['constituency', 'mandal'].includes(req.query.level) ? req.query.level : 'state';
     const list = applyFilters(validRound3(sv.id), {});
     const out = { survey: qn.id, question: qid, label: q.label.en, base: list.length, level, personal_data: 'never included' };

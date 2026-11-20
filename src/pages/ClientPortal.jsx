@@ -6,8 +6,10 @@ import { QuestionResult } from './insights/Results.jsx';
 import { useReportCharts, ReportChart } from './insights/Report.jsx';
 import { exportReportPdf } from '../lib/exporters.js';
 import { GEO } from '../data/geo.js';
-import { findQuestion } from '../data/questionnaire.js';
-import { frequency } from '../lib/analytics.js';
+import { findQuestion, allQuestions } from '../data/questionnaire.js';
+import { freqRows } from '../lib/analytics.js';
+import { mainQuestionId, isRealChoice } from '../lib/reportGen.js';
+import { rolesOf, piiQuestions } from '../lib/roles.js';
 
 export default function ClientPortal() {
   const s = useStore();
@@ -15,8 +17,14 @@ export default function ClientPortal() {
   const [tab, setTab] = useState('report');
   const sent = s.reportStatus === 'Sent to client' && s.report;
   const isClient = s.user.role === 'client';
-  const vote = frequency(s.questionnaire, 'q_vote_intent', s.valid).rows;
-  const lead = [...vote].sort((a, b) => b.pct - a.pct)[0];
+  const qn = s.questionnaire;
+  const mainId = mainQuestionId(qn);
+  const lead = freqRows(qn, mainId, s.valid).filter(isRealChoice).sort((a, b) => b.pct - a.pct)[0];
+  // Key results: the marked headline questions, or else the first few non-personal questions
+  const r = rolesOf(qn);
+  const pii = new Set(piiQuestions(qn));
+  const marked = [mainId, r.second, r.issues, r.services].filter(Boolean);
+  const keyIds = [...new Set(marked.length >= 2 ? marked : [...marked, ...allQuestions(qn).filter((q) => !pii.has(q.id) && ['single', 'multiple', 'grid', 'number'].includes(q.type) && !q.endIf).map((q) => q.id)])].slice(0, 4);
   if (s.serverMode && !s.surveyId) {
     return <div className="shell-body"><PageHead eyebrow="Welcome" icon={Building2} title={`Hello, ${s.user.name}`} desc="Your surveys with Micro Studies and Research will appear here as soon as MSR sets them up." /><Card><Empty icon={CalendarClock} title="No surveys yet">MSR has not linked a survey to your account yet.</Empty></Card></div>;
   }
@@ -47,10 +55,11 @@ export default function ClientPortal() {
       ))}
       {tab === 'results' && (
         <>
-          <div className="callout teal small" style={{ marginBottom: 16 }}><BarChart3 size={15} />Headline: {lead.label} leads with {lead.pct.toFixed(1)}%. Live figures, updated as fieldwork continues.</div>
+          {lead && <div className="callout teal small" style={{ marginBottom: 16 }}><BarChart3 size={15} />Headline: {lead.label} leads with {lead.pct.toFixed(1)}% on “{findQuestion(qn, mainId).label.en}”. Live figures, updated as fieldwork continues.</div>}
           <div className="grid g2">
-            {['q_vote_intent', 'q_leader', 'q_issues', 'q_services'].map((id) => <QuestionResult key={id} qn={s.questionnaire} q={findQuestion(s.questionnaire, id)} list={s.valid} lang={s.lang} />)}
+            {keyIds.map((id) => <QuestionResult key={id} qn={qn} q={findQuestion(qn, id)} list={s.valid} lang={s.lang} />)}
           </div>
+          {!keyIds.length && <Card><Empty icon={BarChart3} title="No results yet">Results appear here as interviews come in.</Empty></Card>}
         </>
       )}
       {tab === 'past' && s.serverMode && (
@@ -69,9 +78,9 @@ export default function ClientPortal() {
           <table className="t">
             <thead><tr><th>Survey</th><th>Fieldwork</th><th className="num">Interviews</th><th>Status</th></tr></thead>
             <tbody>
-              <tr><td className="bold">Telangana Pulse · Round 3</td><td>Nov 2026</td><td className="num">{s.valid.length.toLocaleString('en-IN')}</td><td><Badge tone={sent ? 'green' : 'amber'}>{sent ? 'Report ready' : 'In progress'}</Badge></td></tr>
-              <tr><td className="bold">Telangana Pulse · Round 2</td><td>Aug 2026</td><td className="num">{s.round2.length.toLocaleString('en-IN')}</td><td><Badge tone="green">Report ready</Badge></td></tr>
-              <tr><td className="bold">Telangana Pulse · Round 1</td><td>May 2026</td><td className="num">{s.round1.length ? s.round1.length.toLocaleString('en-IN') : '—'}</td><td><Badge>{s.round1.length ? 'Imported from GoSurvey' : 'Archived'}</Badge></td></tr>
+              <tr><td className="bold">{qn.title.en}</td><td>Current round</td><td className="num">{s.valid.length.toLocaleString('en-IN')}</td><td><Badge tone={sent ? 'green' : 'amber'}>{sent ? 'Report ready' : 'In progress'}</Badge></td></tr>
+              {s.round2.length > 0 && <tr><td className="bold">Previous round</td><td>—</td><td className="num">{s.round2.length.toLocaleString('en-IN')}</td><td><Badge tone="green">Report ready</Badge></td></tr>}
+              {s.round1.length > 0 && <tr><td className="bold">Earlier round</td><td>—</td><td className="num">{s.round1.length.toLocaleString('en-IN')}</td><td><Badge>Imported from GoSurvey</Badge></td></tr>}
             </tbody>
           </table>
         </Card>

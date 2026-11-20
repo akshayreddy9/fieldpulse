@@ -4,9 +4,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
-import { allQuestions } from '../src/data/questionnaire.js';
+import { allQuestions, findQuestion } from '../src/data/questionnaire.js';
 import { GEO } from '../src/data/geo.js';
-import { DIMENSIONS } from '../src/lib/analytics.js';
+import { dimensions } from '../src/lib/analytics.js';
+import { rolesOf, piiQuestions, AGE_BANDS } from '../src/lib/roles.js';
 
 const MODEL = process.env.CLAUDE_MODEL || 'claude-opus-5-5';
 let client = null;
@@ -57,29 +58,36 @@ const ReportSchema = z.object({
 export async function aiReportDraft(draft, facts) {
   const reference = draft.filter((s) => s.source === 'ai').map((s) => ({ id: s.id, title: s.title, body: s.body }));
   const out = await structured(ReportSchema, REPORT_SYSTEM,
-    `Rewrite each section of this survey report so it reads as polished analysis for the client. Keep every number exactly as given.\n\n<facts>\n${JSON.stringify(facts)}\n</facts>\n\n<reference_draft>\n${JSON.stringify(reference)}\n</reference_draft>\n\nReturn one entry per section id: summary, method, vote, issues, gov, seats.`);
+    `Rewrite each section of this survey report so it reads as polished analysis for the client. Keep every number exactly as given, and do not add findings that are not in the draft.\n\n<facts>\n${JSON.stringify(facts)}\n</facts>\n\n<reference_draft>\n${JSON.stringify(reference)}\n</reference_draft>\n\nReturn one entry per section id in the draft: ${reference.map((s) => s.id).join(', ')}.`);
   if (!out) return null;
   const byId = Object.fromEntries(out.sections.map((s) => [s.id, s.body]));
   return draft.map((s) => (s.source === 'ai' && byId[s.id] ? { ...s, body: byId[s.id], model: MODEL } : s));
 }
 
 export async function aiParseQuestion(text, qn) {
-  const qs = allQuestions(qn).filter((q) => (q.type === 'single' || q.type === 'multiple' || q.type === 'grid' || q.type === 'number') && !q.pii && q.id !== 'q_consent');
+  // Everything comes from this survey's questionnaire (question roles) and the current booth list
+  const pii = new Set(piiQuestions(qn));
+  const qs = allQuestions(qn).filter((q) => (q.type === 'single' || q.type === 'multiple' || q.type === 'grid' || q.type === 'number') && !pii.has(q.id) && !q.endIf);
+  if (!qs.length) return null;
   const qids = qs.map((q) => q.id);
-  const dims = ['none', 'round', ...DIMENSIONS.map((d) => d.key)];
+  const DIMS = dimensions(qn);
+  const dims = ['none', 'round', ...DIMS.map((d) => d.key)];
+  const r = rolesOf(qn);
+  const optsOf = (role) => (findQuestion(qn, r[role])?.options || []).map((o) => o.v);
   const schema = z.object({
     qid: z.enum(qids),
     by: z.enum(dims),
     constituency: z.enum(['', ...GEO.constituencies.map((c) => c.id)]),
     mandal: z.enum(['', ...GEO.mandals.map((m) => m.id)]),
-    gender: z.enum(['', 'Male', 'Female']),
-    ageBand: z.enum(['', '18-25', '26-35', '36-50', '51+']),
-    caste: z.enum(['', 'SC', 'ST', 'BC', 'OC', 'Minority']),
-    occupation: z.enum(['', 'FARM', 'ALAB', 'DWAGE', 'PVT', 'GOVT', 'BIZ', 'HOME', 'STU', 'UNEMP']),
+    gender: z.enum(['', ...optsOf('gender')]),
+    ageBand: z.enum(['', ...(r.age ? AGE_BANDS : [])]),
+    caste: z.enum(['', ...optsOf('caste')]),
+    occupation: z.enum(['', ...optsOf('occupation')]),
   });
   const catalogue = {
     questions: qs.map((q) => ({ id: q.id, type: q.type, text: q.label.en })),
-    breakdowns: { none: 'no breakdown', round: 'compare with the previous survey round', ...Object.fromEntries(DIMENSIONS.map((d) => [d.key, d.en])) },
+    breakdowns: { none: 'no breakdown', round: 'compare with the previous survey round', ...Object.fromEntries(DIMS.map((d) => [d.key, d.en])) },
+    filter_values: Object.fromEntries(['gender', 'caste', 'occupation'].filter((k) => r[k]).map((k) => [k, (findQuestion(qn, r[k])?.options || []).map((o) => ({ value: o.v, text: o.en }))])),
     constituencies: GEO.constituencies.map((c) => ({ id: c.id, name: c.name.en, te: c.name.te })),
     mandals: GEO.mandals.map((m) => ({ id: m.id, name: m.name.en })),
   };
@@ -91,7 +99,10 @@ export async function aiParseQuestion(text, qn) {
   const notes = [];
   ['constituency', 'mandal', 'gender', 'ageBand', 'caste', 'occupation'].forEach((k) => { if (out[k]) { filters[k] = out[k]; notes.push(`${k}: ${out[k]}`); } });
   const by = out.by === 'none' || out.by === out.qid ? null : out.by;
+  const type = qs.find((q) => q.id === out.qid)?.type;
   let chart = by ? 'stacked' : 'bar';
+  if (type === 'grid') chart = by ? 'grouped' : 'bar';
+  if (type === 'number' && by) chart = 'mean';
   if (by === 'round') chart = 'compare';
   return { qid: out.qid, by, filters, chart, notes, ai: true };
 }

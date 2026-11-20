@@ -3,36 +3,50 @@ import { FileText, Sparkles, FileDown, CheckCircle2, Send, RefreshCw, UserPen, B
 import { useStore } from '../../store.jsx';
 import { PageHead, Card, Badge, Empty, fmtTime } from '../../components/ui.jsx';
 import { HBar, Stacked } from '../../components/charts.jsx';
-import { generateReport } from '../../lib/reportGen.js';
+import { generateReport, mainQuestionId, isRealChoice } from '../../lib/reportGen.js';
 import { frequency, crosstab } from '../../lib/analytics.js';
-import { PARTY_COLORS } from '../../data/questionnaire.js';
+import { findQuestion } from '../../data/questionnaire.js';
 import { exportReportPdf } from '../../lib/exporters.js';
 import { GEO } from '../../data/geo.js';
+import { R } from '../../lib/roles.js';
+import { colorFor } from '../../components/charts.jsx';
 
 export const STAGES = ['AI draft', 'MSR review', 'Approved', 'Sent to client'];
 
+// Charts for the report sections; a chart is left out when the questionnaire has no question for it
 export function useReportCharts() {
   const s = useStore();
   return useMemo(() => {
     const qn = s.questionnaire;
-    const vote = frequency(qn, 'q_vote_intent', s.valid).rows;
-    const issues = frequency(qn, 'q_issues', s.valid).rows.filter((r) => r.key !== 'OTHER').sort((a, b) => b.pct - a.pct).slice(0, 6);
-    const services = frequency(qn, 'q_services', s.valid).gridRows;
-    const seats = crosstab(qn, 'constituency', 'q_vote_intent', s.valid);
-    return {
-      vote: { title: 'Vote intention (%)', rows: vote.map((r) => ({ key: r.key, label: r.label, value: r.pct, color: PARTY_COLORS[r.key] })) },
-      issues: { title: 'Top problems mentioned (% of respondents)', rows: issues.map((r) => ({ key: r.key, label: r.label, value: r.pct, color: '#0d9488' })) },
-      services: { title: 'Rated good or very good (%)', rows: services.map((g) => ({ key: g.key, label: g.label, value: g.goodPct, color: '#4f46e5' })) },
-      seats: { title: 'Leading party share by constituency (%)', seats, rows: seats.rows.map((r) => { const top = [...r.cells].filter((c) => c.key !== 'UND' && c.key !== 'NS').sort((a, b) => b.pct - a.pct)[0]; return { key: r.key, label: `${r.label} (${top.key})`, value: top.pct, color: PARTY_COLORS[top.key] }; }) },
-    };
+    const mainId = mainQuestionId(qn);
+    const main = findQuestion(qn, mainId);
+    const out = {};
+    const vote = frequency(qn, mainId, s.valid)?.rows;
+    if (vote) out.vote = { qid: mainId, title: `${main.label.en.replace(/[?.]$/, '')} (%)`, rows: vote.map((r, k) => ({ key: r.key, label: r.label, value: r.pct, color: colorFor(mainId, r.key, k) })) };
+    const issues = (frequency(qn, R('issues', qn), s.valid)?.rows || []).filter((r) => r.key !== 'OTHER' && r.count > 0).sort((a, b) => b.pct - a.pct).slice(0, 6);
+    if (issues.length) out.issues = { title: 'Most mentioned (% of respondents)', rows: issues.map((r) => ({ key: r.key, label: r.label, value: r.pct, color: '#0d9488' })) };
+    const services = frequency(qn, R('services', qn), s.valid)?.gridRows || [];
+    if (services.length) out.services = { title: 'Given one of the top two ratings (%)', rows: services.map((g) => ({ key: g.key, label: g.label, value: g.goodPct, color: '#4f46e5' })) };
+    if (vote) {
+      const seats = crosstab(qn, 'constituency', mainId, s.valid);
+      const lbl = (k) => vote.find((r) => r.key === k)?.label || k;
+      out.seats = {
+        qid: mainId, title: 'Leading answer by constituency (%)', seats,
+        rows: seats.rows.map((r) => {
+          const top = [...r.cells].filter((c) => isRealChoice({ key: c.key, label: lbl(c.key) })).sort((a, b) => b.pct - a.pct)[0];
+          return top ? { key: r.key, label: `${r.label} (${lbl(top.key)})`, value: top.pct, color: colorFor(mainId, top.key, 0) } : null;
+        }).filter(Boolean),
+      };
+    }
+    return out;
   }, [s.questionnaire, s.valid]);
 }
 
 export function ReportChart({ id, charts }) {
   const c = charts[id];
   if (!c) return null;
-  if (id === 'seats') return <Stacked rows={c.seats.rows} cols={c.seats.cols} qid="q_vote_intent" />;
-  return <HBar rows={c.rows.map((r) => ({ ...r, pct: r.value }))} qid={id === 'vote' ? 'q_vote_intent' : ''} single={id === 'vote' ? undefined : c.rows[0]?.color} />;
+  if (id === 'seats') return <Stacked rows={c.seats.rows} cols={c.seats.cols} qid={c.qid} />;
+  return <HBar rows={c.rows.map((r) => ({ ...r, pct: r.value }))} qid={id === 'vote' ? c.qid : ''} single={id === 'vote' ? undefined : c.rows[0]?.color} />;
 }
 
 export default function Report() {
@@ -106,7 +120,7 @@ export default function Report() {
               </h2>
               <div className={`body ${sec.source === 'msr' ? 'advice' : ''}`} contentEditable={s.can('insights.reports')} suppressContentEditableWarning data-placeholder={sec.placeholder}
                 onBlur={(e) => editSection(sec.id, e.currentTarget.innerText)}>{sec.body}</div>
-              {sec.chart && <div className="mt12" style={{ border: '1px solid var(--line-2)', borderRadius: 12, padding: 12 }}><div className="tiny bold muted" style={{ marginBottom: 6 }}>{charts[sec.chart].title}</div><ReportChart id={sec.chart} charts={charts} /></div>}
+              {sec.chart && charts[sec.chart] && <div className="mt12" style={{ border: '1px solid var(--line-2)', borderRadius: 12, padding: 12 }}><div className="tiny bold muted" style={{ marginBottom: 6 }}>{charts[sec.chart].title}</div><ReportChart id={sec.chart} charts={charts} /></div>}
             </section>
           ))}
         </div>

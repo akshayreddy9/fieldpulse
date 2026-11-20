@@ -1,6 +1,6 @@
 node_modules
 dist
-data/
+/data/
 .env
 
 # Android build output
@@ -19,3 +19,6 @@ Gpay/
 # Local logs and editor files
 *.log
 .DS_Store
+
+# Screenshots written by the browser checks
+tools/browser-test/*.png

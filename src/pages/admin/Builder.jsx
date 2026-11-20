@@ -5,6 +5,8 @@ import { useStore } from '../../store.jsx';
 import { PageHead, Card, Badge, Modal, Seg, Toggle } from '../../components/ui.jsx';
 import QuestionRenderer from '../../components/QuestionRenderer.jsx';
 import { QUESTION_TYPES, allQuestions, isVisible, describeRule } from '../../data/questionnaire.js';
+import { ROLE_DEFS, ROLE_BY, rolesOf, roleOfQuestion, roleProblems } from '../../lib/roles.js';
+import { GEO } from '../../data/geo.js';
 
 const typeMeta = (t) => QUESTION_TYPES.find((x) => x.type === t);
 const ICONS = { CircleDot, ListChecks, Grid3x3, GitBranch, Type, Hash, CalendarDays, MapPin, Camera };
@@ -34,7 +36,7 @@ function issues(qn) {
     if (!q.label.en?.trim()) out.push({ q: q.id, msg: 'English text missing' });
     if (q.showIf && !allQuestions(qn).some((x) => x.id === q.showIf.q)) out.push({ q: q.id, msg: 'Skip logic points to a deleted question' });
   });
-  return out;
+  return [...out, ...roleProblems(qn)];
 }
 
 function OptionEditor({ list, onChange, label }) {
@@ -52,6 +54,29 @@ function OptionEditor({ list, onChange, label }) {
           </div>
         ))}
         <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => onChange([...list, { v: String(list.length + 1), en: `Option ${list.length + 1}`, te: '' }])}><Plus size={14} />Add</button>
+      </div>
+    </div>
+  );
+}
+
+// "Used for": tells MSR Pulse which question is Gender, Age, Caste, the main result, etc. (see lib/roles.js)
+function RolePicker({ qn, q, onChange }) {
+  const current = roleOfQuestion(qn, q.id);
+  const fits = ROLE_DEFS.filter((d) => d.types.includes(q.type));
+  if (!fits.length && !current) return null;
+  const taken = rolesOf(qn);
+  const implicit = current && !q.role; // found by the starter questionnaire's id, not marked yet
+  return (
+    <div className="field">
+      <label>Used for</label>
+      <select className="select" value={current || ''} onChange={(e) => onChange(e.target.value || null)}>
+        <option value="">Nothing special (just a question)</option>
+        {fits.map((d) => <option key={d.role} value={d.role}>{d.label}{taken[d.role] && taken[d.role] !== q.id ? ' · now another question' : ''}</option>)}
+      </select>
+      <div className="tiny muted mt8">
+        Booth quotas, filters, privacy, roll-ups, trends and the report find their questions through this.
+        {implicit && ' Recognised automatically from the starter questionnaire.'}
+        {current && ROLE_BY[current]?.pii && ' Personal detail: hidden by the privacy lock and erased after the retention period.'}
       </div>
     </div>
   );
@@ -200,6 +225,7 @@ export default function Builder() {
                           <span className="tiny faint mono">{x.id}</span>
                           {x.showIf && <span className="logic-pill" style={{ padding: '0 5px', fontSize: 10 }}><GitBranch size={10} />logic</span>}
                           {x.pii && <span className="badge amber" style={{ padding: '0 5px', fontSize: 10 }}>PII</span>}
+                          {roleOfQuestion(qn, x.id) && <span className="badge indigo" style={{ padding: '0 5px', fontSize: 10 }}>{roleOfQuestion(qn, x.id)}</span>}
                         </div>
                       </div>
                     </div>
@@ -233,12 +259,20 @@ export default function Builder() {
                 {q.type === 'multiple' && <div className="row"><span className="small">Max answers</span><input className="input" type="number" style={{ width: 70 }} value={q.maxSelect || ''} onChange={(e) => editQ({ maxSelect: e.target.value ? Number(e.target.value) : undefined })} /></div>}
                 {q.type === 'number' && <div className="row"><span className="small">Range</span><input className="input" type="number" style={{ width: 70 }} value={q.min ?? ''} onChange={(e) => editQ({ min: Number(e.target.value) })} /><span>–</span><input className="input" type="number" style={{ width: 70 }} value={q.max ?? ''} onChange={(e) => editQ({ max: Number(e.target.value) })} /></div>}
               </div>
+              <RolePicker qn={qn} q={q} onChange={(role) => setQn((n) => {
+                // One question per role: clear the role from any other question; name/mobile are always private
+                n.groups.forEach((g) => { g.questions = g.questions.map((x) => {
+                  // 'none' (not just empty) so a starter-questionnaire question is not picked up by its old id again
+                  if (x.id === q.id) return { ...x, role: role || 'none', ...(role && ROLE_BY[role].pii ? { pii: true } : {}) };
+                  return role && x.role === role ? { ...x, role: undefined } : x;
+                }); });
+              })} />
               {q.options && <OptionEditor label="Answer options (English · Telugu)" list={q.options} onChange={(options) => editQ({ options })} />}
               {q.type === 'grid' && <>
                 <OptionEditor label="Grid rows" list={q.rows} onChange={(rows) => editQ({ rows })} />
                 <OptionEditor label="Grid columns (scale)" list={q.cols} onChange={(cols) => editQ({ cols })} />
               </>}
-              {q.type === 'cascade' && <div className="callout blue small"><GitBranch size={15} style={{ flexShrink: 0 }} />Cascading list: Constituency → Mandal → Booth. Each list shows only the items under the previous choice, and surveyors only see the booths assigned to them. Lists are loaded from the booth master (6 constituencies, 18 mandals, 72 booths).</div>}
+              {q.type === 'cascade' && <div className="callout blue small"><GitBranch size={15} style={{ flexShrink: 0 }} />Cascading list: Constituency → Mandal → Booth. Each list shows only the items under the previous choice, and surveyors only see the booths assigned to them. Lists come from the booth list ({GEO.constituencies.length} constituencies, {GEO.mandals.length} mandals, {GEO.booths.length} booths{GEO.sample ? ', sample list' : ''}), managed under Set up › Booth list.</div>}
               {q.endIf && <div className="callout amber small"><AlertTriangle size={15} style={{ flexShrink: 0 }} />If the answer is “{q.options.find((o) => o.v === q.endIf)?.en}”, the interview ends here and only the refusal is recorded.</div>}
             </div>
           </Card>

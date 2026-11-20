@@ -1,6 +1,8 @@
 // Pulse Live fake-interview detection engine.
 // Each rule adds weight to a 0-100 risk score with a human-readable reason.
 import { BOOTH_BY_ID, distanceKm } from '../data/geo.js';
+import { allQuestions } from '../data/questionnaire.js';
+import { activeQuestionnaire, piiQuestions, A } from './roles.js';
 
 export const RULES = [
   { id: 'SHORT', name: 'Too short', weight: 40, desc: 'Interview took under 45% of the median time for this questionnaire.' },
@@ -9,15 +11,21 @@ export const RULES = [
   { id: 'NO_CONSENT', name: 'Consent line not read', weight: 40, desc: 'AI checker could not find the consent statement in the recording.' },
   { id: 'BURST', name: 'Back-to-back', weight: 20, desc: 'Started less than 4 minutes after the surveyor’s previous interview ended.' },
   { id: 'CLUSTER', name: 'Same spot', weight: 20, desc: '3 or more interviews by this surveyor from the same spot (within 20 m).' },
-  { id: 'STRAIGHT', name: 'Straight-lining', weight: 15, desc: 'Every row of the services grid has the same answer.' },
+  { id: 'STRAIGHT', name: 'Straight-lining', weight: 15, desc: 'Every row of a rating grid (4 or more rows) has the same answer.' },
   { id: 'NIGHT', name: 'Odd hours', weight: 15, desc: 'Interview started before 7 AM or after 9 PM.' },
   { id: 'LOW_ACC', name: 'Weak GPS', weight: 10, desc: 'GPS accuracy worse than 100 m.' },
 ];
 export const RULE_BY_ID = Object.fromEntries(RULES.map((r) => [r.id, r]));
 export const FLAG_THRESHOLD = 40;
 
-function signature(a) {
-  return JSON.stringify([a.q_gender, a.q_age, a.q_caste, a.q_occupation, a.q_issues, a.q_services, a.q_scheme, a.q_vote_intent, a.q_leader, a.q_govt_rating]);
+// Questions whose answers are compared for "identical answer sets": everything the respondent answered, except
+// personal details and things that are naturally the same for one surveyor (location, date, GPS, photo).
+function compareSet(qn) {
+  const skip = new Set(piiQuestions(qn));
+  return allQuestions(qn).filter((q) => !skip.has(q.id) && !['cascade', 'gps', 'photo', 'date'].includes(q.type)).map((q) => q.id);
+}
+function signature(a, ids) {
+  return JSON.stringify(ids.map((id) => a[id] ?? null));
 }
 
 function median(arr) {
@@ -26,7 +34,10 @@ function median(arr) {
   return s[Math.floor(s.length / 2)];
 }
 
-export function assessAll(interviews) {
+// qn: the survey's questionnaire (the server passes it; the browser uses the open survey's)
+export function assessAll(interviews, qn = activeQuestionnaire()) {
+  const ids = compareSet(qn);
+  const grids = allQuestions(qn).filter((q) => q.type === 'grid' && (q.rows || []).length >= 4);
   const med = median(interviews.map((i) => i.durationSec)) || 900;
   const bySv = {};
   interviews.forEach((i) => { (bySv[i.surveyorId] ||= []).push(i); });
@@ -34,14 +45,15 @@ export function assessAll(interviews) {
   Object.values(bySv).forEach((list) => {
     list.sort((a, b) => a.startedAt - b.startedAt);
     const sigCount = {};
-    list.forEach((i) => { const s = signature(i.answers); sigCount[s] = (sigCount[s] || 0) + 1; });
+    const sigOf = new Map(list.map((i) => [i, signature(i.answers || {}, ids)]));
+    list.forEach((i) => { const s = sigOf.get(i); sigCount[s] = (sigCount[s] || 0) + 1; });
     list.forEach((i, idx) => {
       const flags = [];
       const booth = BOOTH_BY_ID[i.boothId];
       if (i.durationSec < med * 0.45) flags.push({ id: 'SHORT', detail: `${Math.round(i.durationSec / 60)} min vs median ${Math.round(med / 60)} min` });
       const dist = booth ? distanceKm(i.gps, booth) : 0;
       if (dist > 1.5) flags.push({ id: 'GPS_FAR', detail: `${dist.toFixed(1)} km from ${booth.short}` });
-      if (sigCount[signature(i.answers)] > 1) flags.push({ id: 'DUPLICATE', detail: `${sigCount[signature(i.answers)]} identical answer sets` });
+      if (ids.length >= 3 && sigCount[sigOf.get(i)] > 1) flags.push({ id: 'DUPLICATE', detail: `${sigCount[sigOf.get(i)]} identical answer sets` });
       if (i.consent && i.consent.consentRead === false) flags.push({ id: 'NO_CONSENT', detail: 'Consent script not detected in audio' });
       const prev = list[idx - 1];
       if (prev) {
@@ -50,8 +62,11 @@ export function assessAll(interviews) {
       }
       const near = list.filter((j) => j !== i && distanceKm(j.gps, i.gps) < 0.02).length;
       if (near >= 3) flags.push({ id: 'CLUSTER', detail: `${near + 1} interviews at the same spot` });
-      const g = Object.values(i.answers.q_services || {});
-      if (g.length >= 4 && g.every((v) => v === g[0])) flags.push({ id: 'STRAIGHT', detail: `All rows answered “${g[0]}”` });
+      const flat = grids.find((q) => { const g = Object.values(i.answers?.[q.id] || {}); return g.length >= 4 && g.every((v) => v === g[0]); });
+      if (flat) {
+        const v = Object.values(i.answers[flat.id])[0];
+        flags.push({ id: 'STRAIGHT', detail: `All rows of “${flat.label.en.slice(0, 40)}” answered “${flat.cols?.find((c) => c.v === v)?.en || v}”` });
+      }
       const hr = Math.floor(((i.startedAt / 3600000) + 5.5) % 24);
       if (hr < 7 || hr >= 21) flags.push({ id: 'NIGHT', detail: `Started ${new Date(i.startedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}` });
       if (i.gps.acc > 100) flags.push({ id: 'LOW_ACC', detail: `±${i.gps.acc} m` });
@@ -81,8 +96,11 @@ export function buildTranscript(interview, qn) {
     push('Surveyor', 'కొన్ని ప్రశ్నలు అడుగుతాను, సరేనా?', 'I will ask a few questions, okay?', 'consent-missing');
     push('Respondent', 'హా.', 'Yes.');
   }
-  push('Surveyor', 'మీ వయస్సు ఎంత?', 'What is your age?');
-  push('Respondent', `${a.q_age} సంవత్సరాలు.`, `${a.q_age} years.`);
+  const age = A(interview, 'age', qn) ?? a.q_age;
+  if (age !== undefined) {
+    push('Surveyor', 'మీ వయస్సు ఎంత?', 'What is your age?');
+    push('Respondent', `${age} సంవత్సరాలు.`, `${age} years.`);
+  }
   push('Surveyor', 'మీ ప్రాంతంలో ప్రధాన సమస్యలు ఏమిటి?', 'What are the main problems in your area?');
   push('Respondent', 'ఉద్యోగాలు లేవు, ధరలు పెరిగిపోయాయి.', 'No jobs, prices have gone up.');
   push('Surveyor', 'ఈరోజు ఎన్నికలు జరిగితే ఏ పార్టీకి ఓటు వేస్తారు?', 'If elections were held today, which party would you vote for?');

@@ -30,10 +30,11 @@ export const STATE_RULES = {
   webhooks: { perm: 'addons.api' },
   peakMonths: { perm: 'settings.delivery' },
   retentionDays: { perm: 'settings.compliance' },
+  geo: { perm: 'admin.access' }, // booth list: shared by all surveys, admins only
 };
 
 // What each role may read from shared state
 export const READABLE = {
-  client: ['questionnaire', 'report', 'reportStatus', 'privacyLock', 'round1Imported', 'permissions'],
-  surveyor: ['questionnaire', 'publishedVersion', 'targets', 'surveyors', 'permissions', 'privacyLock'],
+  client: ['questionnaire', 'report', 'reportStatus', 'privacyLock', 'round1Imported', 'permissions', 'geo'],
+  surveyor: ['questionnaire', 'publishedVersion', 'targets', 'surveyors', 'permissions', 'privacyLock', 'geo'],
 };

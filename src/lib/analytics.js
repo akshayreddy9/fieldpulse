@@ -1,32 +1,38 @@
 // Pulse Insights analytics: frequencies, roll-ups (booth -> state), cross-tabs and round comparison.
+// Questions are found by their role (lib/roles.js), not by fixed ids, so any questionnaire works.
 import { GEO, CONST_BY_ID, MANDAL_BY_ID, BOOTH_BY_ID, ageBand, defaultTargets } from '../data/geo.js';
 import { findQuestion, optionLabel, allQuestions } from '../data/questionnaire.js';
+import { R, A, AGE_BANDS, activeQuestionnaire } from './roles.js';
 
-export const DIMENSIONS = [
-  { key: 'constituency', en: 'Constituency' },
-  { key: 'mandal', en: 'Mandal' },
-  { key: 'q_gender', en: 'Gender' },
-  { key: 'ageBand', en: 'Age group' },
-  { key: 'q_caste', en: 'Caste category' },
-  { key: 'q_occupation', en: 'Occupation' },
-  { key: 'q_scheme', en: 'Scheme beneficiary' },
-];
+// Ways to break results down: geography plus the questionnaire's profile questions (when it has them)
+export function dimensions(qn = activeQuestionnaire()) {
+  const r = (role) => R(role, qn);
+  return [
+    { key: 'constituency', en: 'Constituency' },
+    { key: 'mandal', en: 'Mandal' },
+    r('gender') && { key: r('gender'), en: 'Gender' },
+    r('age') && { key: 'ageBand', en: 'Age group' },
+    r('caste') && { key: r('caste'), en: 'Caste category' },
+    r('occupation') && { key: r('occupation'), en: 'Occupation' },
+    r('scheme') && { key: r('scheme'), en: findQuestion(qn, r('scheme'))?.label.en || 'Yes / No group' },
+  ].filter(Boolean);
+}
 
-const AGE_ORDER = ['18-25', '26-35', '36-50', '51+'];
+const AGE_ORDER = AGE_BANDS;
 
 export function valueOf(i, key) {
   switch (key) {
     case 'constituency': return i.constituencyId;
     case 'mandal': return i.mandalId;
     case 'booth': return i.boothId;
-    case 'ageBand': return ageBand(i.answers.q_age);
+    case 'ageBand': return ageBand(A(i, 'age'));
     case 'round': return `R${i.round}`;
     default: return i.answers[key];
   }
 }
 
 export function keyLabel(qn, key, lang = 'en') {
-  const d = DIMENSIONS.find((x) => x.key === key);
+  const d = dimensions(qn).find((x) => x.key === key);
   const q = findQuestion(qn, key);
   if (q) return q.label[lang] || q.label.en;
   if (d) return d.en;
@@ -56,15 +62,16 @@ export function applyFilters(list, f = {}) {
     (!f.constituency || i.constituencyId === f.constituency) &&
     (!f.mandal || i.mandalId === f.mandal) &&
     (!f.booth || i.boothId === f.booth) &&
-    (!f.gender || i.answers.q_gender === f.gender) &&
-    (!f.ageBand || ageBand(i.answers.q_age) === f.ageBand) &&
-    (!f.caste || i.answers.q_caste === f.caste) &&
-    (!f.occupation || i.answers.q_occupation === f.occupation));
+    (!f.gender || A(i, 'gender') === f.gender) &&
+    (!f.ageBand || ageBand(A(i, 'age')) === f.ageBand) &&
+    (!f.caste || A(i, 'caste') === f.caste) &&
+    (!f.occupation || A(i, 'occupation') === f.occupation));
 }
 
-// Frequency for one question. Returns { type, base, rows, mean?, gridRows?, samples? }
+// Frequency for one question. Returns { type, base, rows, mean?, gridRows?, samples? }, or null if the
+// questionnaire has no such question (callers must then skip that chart).
 export function frequency(qn, qid, list, lang = 'en') {
-  const q = findQuestion(qn, qid);
+  const q = qid ? findQuestion(qn, qid) : null;
   if (!q) return null;
   const asked = list.filter((i) => i.answers[qid] !== undefined && i.answers[qid] !== '');
   const base = asked.length;
@@ -102,7 +109,9 @@ export function frequency(qn, qid, list, lang = 'en') {
         if (d) { d.count++; sum += Number(v); n++; }
       });
       dist.forEach((d) => { d.pct = n ? (d.count / n) * 100 : 0; });
-      return { key: r.v, label: r[lang] || r.en, mean: n ? sum / n : 0, dist, goodPct: n ? ((dist[3].count + dist[4].count) / n) * 100 : 0 };
+      // "Good" = the top two points of the scale (Good + Very good on a 5-point scale)
+      const top = dist.slice(-2).reduce((a, d) => a + d.count, 0);
+      return { key: r.v, label: r[lang] || r.en, mean: n ? sum / n : 0, dist, goodPct: n ? (top / n) * 100 : 0 };
     });
     return { q, type: 'grid', base, gridRows };
   }
@@ -149,6 +158,10 @@ export function crosstab(qn, rowKey, colKey, list, lang = 'en') {
   return { rows, cols };
 }
 
+// Safe helpers for screens: empty results instead of a crash when the questionnaire lacks the question
+export const freqRows = (qn, qid, list, lang) => frequency(qn, qid, list, lang)?.rows || [];
+export const gridRowsOf = (qn, qid, list, lang) => frequency(qn, qid, list, lang)?.gridRows || [];
+
 export function compareRounds(qn, qid, cur, prev, lang = 'en') {
   const a = frequency(qn, qid, cur, lang);
   const b = frequency(qn, qid, prev, lang);
@@ -166,25 +179,26 @@ export function boothProgress(boothId, list, targetsMap) {
   const g = {};
   const a = {};
   const c = {};
+  const inc = (o, k) => { if (k !== undefined && k !== null && k !== '') o[k] = (o[k] || 0) + 1; };
   sub.forEach((i) => {
-    g[i.answers.q_gender] = (g[i.answers.q_gender] || 0) + 1;
-    const ab = ageBand(i.answers.q_age);
-    a[ab] = (a[ab] || 0) + 1;
-    c[i.answers.q_caste] = (c[i.answers.q_caste] || 0) + 1;
+    inc(g, A(i, 'gender'));
+    inc(a, ageBand(A(i, 'age')));
+    inc(c, A(i, 'caste'));
   });
-  return { target: t, done: sub.length, pct: Math.min(100, (sub.length / t.total) * 100), gender: g, age: a, caste: c };
+  return { target: t, done: sub.length, pct: t.total ? Math.min(100, (sub.length / t.total) * 100) : 0, gender: g, age: a, caste: c };
 }
 
-// Roll-up: booth -> mandal -> constituency -> state, with totals computed automatically
-export function rollup(list, targetsMap, metricKey = 'q_vote_intent') {
+// Roll-up: booth -> mandal -> constituency -> state, with totals computed automatically.
+// metricKey: the question whose answer shares are shown (default: the questionnaire's "Main result" question).
+export function rollup(list, targetsMap, metricKey = R('main')) {
   const node = (sub, target) => {
     const counts = {};
-    sub.forEach((i) => { const v = i.answers[metricKey]; counts[v] = (counts[v] || 0) + 1; });
+    if (metricKey) sub.forEach((i) => { const v = i.answers[metricKey]; if (v !== undefined) counts[v] = (counts[v] || 0) + 1; });
     const share = Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, (v / (sub.length || 1)) * 100]));
     return { n: sub.length, target, pct: target ? (sub.length / target) * 100 : 0, share };
   };
   const tOf = (bid) => ((targetsMap && targetsMap[bid]) || defaultTargets(BOOTH_BY_ID[bid])).total;
-  const state = { id: 'TS', level: 'State', children: [] };
+  const state = { id: 'STATE', level: 'State', children: [] };
   let stateTarget = 0;
   GEO.constituencies.forEach((c) => {
     const cNode = { id: c.id, level: 'Constituency', name: c.name, children: [] };

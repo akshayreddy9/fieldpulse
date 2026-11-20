@@ -3,15 +3,22 @@ import { Network, ChevronRight, ChevronDown, Download, Sigma } from 'lucide-reac
 import { useStore } from '../../store.jsx';
 import { PageHead, Card, Progress, Badge, Seg } from '../../components/ui.jsx';
 import { rollup } from '../../lib/analytics.js';
-import { findQuestion } from '../../data/questionnaire.js';
+import { findQuestion, allQuestions } from '../../data/questionnaire.js';
 import { colorFor } from '../../components/charts.jsx';
 import { exportTableExcel } from '../../lib/exporters.js';
+import { GEO, STATE } from '../../data/geo.js';
+import { mainQuestionId } from '../../lib/reportGen.js';
+import { rolesOf, piiQuestions } from '../../lib/roles.js';
 
-const METRICS = [
-  { value: 'q_vote_intent', label: 'Vote intention' },
-  { value: 'q_leader', label: 'Preferred CM' },
-  { value: 'q_scheme', label: 'Scheme beneficiary' },
-];
+// Questions that can be totalled: the marked headline questions first, then every other single-choice question
+function metricsFor(qn) {
+  const r = rolesOf(qn);
+  const pii = new Set(piiQuestions(qn));
+  const single = allQuestions(qn).filter((q) => q.type === 'single' && !q.endIf && !pii.has(q.id));
+  const first = [mainQuestionId(qn), r.second, r.scheme].filter(Boolean);
+  return [...first.map((id) => single.find((q) => q.id === id)).filter(Boolean), ...single.filter((q) => !first.includes(q.id))]
+    .map((q) => ({ value: q.id, label: q.label.en.length > 48 ? `${q.label.en.slice(0, 46)}…` : q.label.en }));
+}
 
 function ShareBar({ share, keys, qid }) {
   return (
@@ -23,11 +30,13 @@ function ShareBar({ share, keys, qid }) {
 
 export default function Rollup() {
   const s = useStore();
-  const [metric, setMetric] = useState('q_vote_intent');
-  const [open, setOpen] = useState({ TS: true, KNR: true });
+  const METRICS = useMemo(() => metricsFor(s.questionnaire), [s.questionnaire]);
+  const [picked, setMetric] = useState(null);
+  const metric = METRICS.some((m) => m.value === picked) ? picked : METRICS[0]?.value || null;
+  const [open, setOpen] = useState(() => ({ STATE: true, [GEO.constituencies[0]?.id]: true }));
   const tree = useMemo(() => rollup(s.valid, s.targets, metric), [s.valid, s.targets, metric]);
-  const q = findQuestion(s.questionnaire, metric);
-  const keys = q.options.map((o) => o.v).concat(q.allowOther ? ['OTHER'] : []);
+  const q = metric ? findQuestion(s.questionnaire, metric) : null;
+  const keys = q ? q.options.map((o) => o.v).concat(q.allowOther ? ['OTHER'] : []) : [];
   const show = keys.slice(0, 4);
 
   const rows = [];
@@ -43,14 +52,16 @@ export default function Rollup() {
       out.push([n.level, path, n.n, n.target, Number(n.pct.toFixed(1)), ...keys.map((k) => Number((n.share[k] || 0).toFixed(1)))]);
       (n.children || []).forEach((c) => rec(c, `${path} > ${c.short || c.name.en}`));
     };
-    rec(tree, 'Telangana');
-    exportTableExcel('Roll-up', ['Level', 'Area', 'Interviews', 'Target', '% complete', ...keys.map((k) => `${q.options.find((o) => o.v === k)?.en || k} %`)], out, `MSR-Pulse-Rollup-${metric}.xlsx`);
+    rec(tree, STATE.name.en);
+    exportTableExcel('Roll-up', ['Level', 'Area', 'Interviews', 'Target', '% complete', ...keys.map((k) => `${q?.options.find((o) => o.v === k)?.en || k} %`)], out, `MSR-Pulse-Rollup-${metric || 'totals'}.xlsx`);
   };
 
   return (
     <div>
       <PageHead eyebrow="Results & reports" icon={Network} title="Totals from booth up to state" desc="Booth results add up automatically to mandal, constituency and state. No more merging Excel files by hand: totals update the moment an interview is accepted or rejected.">
-        <Seg value={metric} onChange={setMetric} options={METRICS} />
+        {METRICS.length <= 3
+          ? <Seg value={metric} onChange={setMetric} options={METRICS} />
+          : <select className="select" style={{ width: 280 }} value={metric || ''} onChange={(e) => setMetric(e.target.value)}>{METRICS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</select>}
         <button className="btn primary" onClick={exportAll}><Download size={15} />Export all levels</button>
       </PageHead>
       <div className="grid g4" style={{ marginBottom: 16 }}>
@@ -60,15 +71,15 @@ export default function Rollup() {
             <Card key={c.id}>
               <div className="row"><b>{c.name.en}</b><div className="spacer" /><Badge>{c.n}</Badge></div>
               <div className="mt8"><ShareBar share={c.share} keys={keys} qid={metric} /></div>
-              {top.length >= 2 ? <div className="small mt8">Leading: <b style={{ color: colorFor(metric, top[0][0], keys.indexOf(top[0][0])) }}>{q.options.find((o) => o.v === top[0][0])?.en}</b> {top[0][1].toFixed(1)}% · margin {(top[0][1] - top[1][1]).toFixed(1)} pts</div> : <div className="small mt8 muted">No interviews yet</div>}
+              {top.length >= 2 ? <div className="small mt8">Leading: <b style={{ color: colorFor(metric, top[0][0], keys.indexOf(top[0][0])) }}>{q?.options.find((o) => o.v === top[0][0])?.en}</b> {top[0][1].toFixed(1)}% · margin {(top[0][1] - top[1][1]).toFixed(1)} pts</div> : <div className="small mt8 muted">No interviews yet</div>}
             </Card>
           );
         }).slice(0, 4)}
       </div>
-      <Card flush title={<span className="row"><Sigma size={16} />Roll-up table</span>} sub="Click a row to open the level below" right={<><button className="btn sm" onClick={() => { const all = {}; const r = (n) => { all[n.id] = true; (n.children || []).forEach((c) => { if (c.children) r(c); }); }; r(tree); setOpen(all); }}>Expand all</button><button className="btn sm" onClick={() => setOpen({ TS: true })}>Collapse</button></>}>
+      <Card flush title={<span className="row"><Sigma size={16} />Roll-up table</span>} sub="Click a row to open the level below" right={<><button className="btn sm" onClick={() => { const all = {}; const r = (n) => { all[n.id] = true; (n.children || []).forEach((c) => { if (c.children) r(c); }); }; r(tree); setOpen(all); }}>Expand all</button><button className="btn sm" onClick={() => setOpen({ STATE: true })}>Collapse</button></>}>
         <div className="table-wrap">
           <table className="t">
-            <thead><tr><th>Area</th><th className="num">Interviews</th><th className="num">Target</th><th>Progress</th>{show.map((k) => <th key={k} className="num">{q.options.find((o) => o.v === k)?.en}</th>)}<th>Share</th></tr></thead>
+            <thead><tr><th>Area</th><th className="num">Interviews</th><th className="num">Target</th><th>Progress</th>{show.map((k) => <th key={k} className="num">{q?.options.find((o) => o.v === k)?.en || k}</th>)}<th>Share</th></tr></thead>
             <tbody>
               {rows.map(({ n, depth }) => {
                 const has = !!n.children;
@@ -77,7 +88,7 @@ export default function Rollup() {
                     <td style={{ paddingLeft: 14 + depth * 22 }}>
                       <div className="row nowrap">
                         {has ? (open[n.id] ? <ChevronDown size={15} /> : <ChevronRight size={15} />) : <span style={{ width: 15 }} />}
-                        <span className={depth < 2 ? 'bold' : ''}>{depth === 0 ? 'Telangana (state)' : n.short || n.name.en}</span>
+                        <span className={depth < 2 ? 'bold' : ''}>{depth === 0 ? `${STATE.name.en} (state)` : n.short || n.name.en}</span>
                         <Badge tone={['navy', 'indigo', 'teal', ''][depth]}>{n.level}</Badge>
                       </div>
                     </td>

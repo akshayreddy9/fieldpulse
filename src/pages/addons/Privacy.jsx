@@ -4,10 +4,14 @@ import { useStore } from '../../store.jsx';
 import { PageHead, Card, Toggle, PII, Badge, Stat, Empty, fmtTime } from '../../components/ui.jsx';
 import { BOOTH_BY_ID } from '../../data/geo.js';
 import { exportTableExcel } from '../../lib/exporters.js';
+import { R, piiQuestions } from '../../lib/roles.js';
 
 export default function Privacy() {
   const s = useStore();
   const sample = s.interviews.slice(-8).reverse();
+  const nameId = R('name');
+  const phoneId = R('phone');
+  const protectedCount = piiQuestions(s.questionnaire).length;
   return (
     <div>
       <PageHead eyebrow="Add-ons" icon={Lock} title="Extra privacy lock" desc="Names and phone numbers are replaced by codes everywhere: screens, exports and reports. Seeing a real value needs a reason, and every look is recorded permanently.">
@@ -17,7 +21,7 @@ export default function Privacy() {
         <Card><div className="row"><div style={{ flex: 1 }}><div className="small muted bold">Privacy lock</div><div className="bold" style={{ fontSize: 22, marginTop: 4 }}>{s.privacyLock ? 'On' : 'Off'}</div></div>
           <Toggle on={s.privacyLock} onChange={(v) => { s.update({ privacyLock: v }); s.log(`Privacy lock turned ${v ? 'on' : 'off'}`); }} /></div></Card>
         <Stat label="Values revealed (all time)" value={s.accessLog.length} icon={Eye} tone="amber" />
-        <Stat label="Personal fields protected" value="2" hint="Respondent name, mobile number" tone="blue" icon={ShieldCheck} />
+        <Stat label="Personal fields protected" value={protectedCount} hint="Questions marked as personal details" tone="blue" icon={ShieldCheck} />
         <Stat label="Respondents protected" value={s.interviews.length.toLocaleString('en-IN')} tone="green" />
       </div>
       <div className="grid g2">
@@ -25,7 +29,7 @@ export default function Privacy() {
           <table className="t">
             <thead><tr><th>Interview</th><th>Respondent</th><th>Mobile</th><th>Booth</th></tr></thead>
             <tbody>{sample.map((i) => (
-              <tr key={i.id}><td className="bold small">{i.id}</td><td><PII value={i.answers.q_name} interviewId={i.id} /></td><td><PII value={i.answers.q_phone} kind="phone" interviewId={i.id} /></td><td className="small">{BOOTH_BY_ID[i.boothId].short}</td></tr>
+              <tr key={i.id}><td className="bold small">{i.id}</td><td><PII value={nameId && i.answers[nameId]} interviewId={i.id} question={nameId} /></td><td><PII value={phoneId && i.answers[phoneId]} kind="phone" interviewId={i.id} question={phoneId} /></td><td className="small">{BOOTH_BY_ID[i.boothId]?.short || i.boothId}</td></tr>
             ))}</tbody>
           </table>
           {!s.privacyLock && <div className="callout amber small" style={{ margin: 12 }}><Unlock size={15} />Lock is off: personal details are visible to everyone with access.</div>}

@@ -122,6 +122,7 @@ function seedProduction(db) {
   Object.entries(DEFAULT_STATE()).forEach(([k, v]) => setKv(db, k, v));
   setKv(db, 'surveyors', []);
   setKv(db, 'webhooks', []);
+  setKv(db, 'geo', { empty: true }); // no sample booths: MSR uploads its booth list (Set up > Booth list)
   setKv(db, 'jwtSecret', process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex'));
   db.prepare('INSERT INTO users (phone, name, role, surveyor_id) VALUES (?,?,?,NULL)').run(phone, String(process.env.ADMIN_NAME || 'MSR Admin').slice(0, 80), 'admin');
   db.prepare('INSERT INTO audit (t, who, what) VALUES (?,?,?)').run(Date.now(), 'System', 'MSR Pulse installed (production, empty)');

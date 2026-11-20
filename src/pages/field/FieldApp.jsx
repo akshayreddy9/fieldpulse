@@ -6,10 +6,12 @@ import {
 import { useStore } from '../../store.jsx';
 import { PageHead, Card, Toggle, Badge, Progress, fmtClock, initials } from '../../components/ui.jsx';
 import QuestionRenderer, { validateAnswer } from '../../components/QuestionRenderer.jsx';
-import { BOOTH_BY_ID, MANDAL_BY_ID, CONST_BY_ID, ageBand, defaultTargets } from '../../data/geo.js';
+import { GEO, BOOTH_BY_ID, MANDAL_BY_ID, CONST_BY_ID, ageBand, defaultTargets } from '../../data/geo.js';
 import { isVisible } from '../../data/questionnaire.js';
 import { boothProgress, istDay } from '../../lib/analytics.js';
 import { AUDIO } from '../../lib/audio.js';
+import { A, R } from '../../lib/roles.js';
+import { newInterviewId } from '../../lib/outbox.js';
 
 const mmss = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
@@ -23,8 +25,10 @@ export default function FieldApp(props) {
   const isSurveyor = s.user.role === 'surveyor';
   const me = isSurveyor ? team.find((x) => x.id === s.user.surveyorId) : team[0];
   let msg = null;
-  if (s.serverMode && !s.surveyId) msg = ['No survey is running right now', isSurveyor ? 'When MSR starts fieldwork for a survey, it will appear here.' : 'Create a survey and start its fieldwork first.'];
+  if (!GEO.booths.length) msg = ['No booth list yet', isSurveyor ? 'MSR has not loaded the booth list yet. Ask your supervisor.' : 'Upload the booth list first: Set up > Booth list.'];
+  else if (s.serverMode && !s.surveyId) msg =['No survey is running right now', isSurveyor ? 'When MSR starts fieldwork for a survey, it will appear here.' : 'Create a survey and start its fieldwork first.'];
   else if (!me) msg = isSurveyor ? ['Your booth is not set up yet', 'Ask your supervisor to add you, with your booth, in the surveyor list.'] : ['No surveyors yet', 'Upload the surveyor list from Excel on Surveyors & team.'];
+  else if (isSurveyor && !me.boothIds.some((b) => BOOTH_BY_ID[b])) msg = ['Your booth is not in the booth list', `Booth ${me.boothIds[0]} is not in MSR's booth list. Ask your supervisor to correct your booth in the surveyor list.`];
   if (msg) return <div className="fapp" style={{ display: 'grid', placeItems: 'center', padding: 24, textAlign: 'center' }}><div><Smartphone size={34} className="faint" /><h3 style={{ marginTop: 10 }}>{msg[0]}</h3><p className="muted small">{msg[1]}</p></div></div>;
   return <FieldAppInner {...props} />;
 }
@@ -45,17 +49,18 @@ function FieldAppInner({ mode = 'preview' }) {
     if (!navigator.onLine) off();
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const hasWaiting = s.outbox.length > 0;
   useEffect(() => {
-    if (s.deviceOnline && s.outbox.length) {
-      const id = setTimeout(() => { s.syncOutbox(); }, 800);
-      return () => clearTimeout(id);
-    }
-    return undefined;
-  }, [s.deviceOnline]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!s.deviceOnline || !hasWaiting) return undefined;
+    const first = setTimeout(() => { s.syncOutbox(); }, 800);
+    // Keep trying while interviews are waiting (weak signal, server restarting): no need to restart the app
+    const again = setInterval(() => { s.syncOutbox(); }, 30000);
+    return () => { clearTimeout(first); clearInterval(again); };
+  }, [s.deviceOnline, hasWaiting]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sv = surveyorsOnly.find((x) => x.id === svId) || surveyorsOnly[0];
-  const boothId = sv.boothIds[0];
-  const booth = BOOTH_BY_ID[boothId];
+  const boothId = sv.boothIds.find((b) => BOOTH_BY_ID[b]) || sv.boothIds[0];
+  const booth = BOOTH_BY_ID[boothId] || GEO.booths[0];
   const [tab, setTab] = useState('home');
   const [screen, setScreen] = useState('home');
   const [page, setPage] = useState(0);
@@ -74,6 +79,7 @@ function FieldAppInner({ mode = 'preview' }) {
   const [qnSnap, setQnSnap] = useState(null);
   const qn = qnSnap || s.questionnaire;
   const [errQ, setErrQ] = useState(null);
+  const [saveResult, setSaveResult] = useState('sent');
 
   const prog = useMemo(() => boothProgress(boothId, s.valid, s.targets), [boothId, s.valid, s.targets]);
   const mineAll = useMemo(() => [...s.interviews.filter((i) => i.surveyorId === sv.id), ...s.outbox.filter((i) => i.surveyorId === sv.id)].sort((a, b) => b.startedAt - a.startedAt), [s.interviews, s.outbox, sv.id]);
@@ -115,7 +121,13 @@ function FieldAppInner({ mode = 'preview' }) {
   });
 
   const begin = () => {
-    setAns({ q_loc: { constituency: booth.constituencyId, mandal: booth.mandalId, booth: booth.id }, q_consent: 'Y', q_date: new Date().toISOString().slice(0, 10) });
+    // Start with the surveyor's booth filled in (cascade question), and the starter questionnaire's consent/date answers when present
+    const qs0 = s.questionnaire.groups.flatMap((g) => g.questions);
+    const pre = {};
+    qs0.filter((x) => x.type === 'cascade').forEach((x) => { pre[x.id] = { constituency: booth.constituencyId, mandal: booth.mandalId, booth: booth.id }; });
+    if (qs0.some((x) => x.id === 'q_consent')) pre.q_consent = 'Y';
+    if (qs0.some((x) => x.id === 'q_date' && x.type === 'date')) pre.q_date = new Date().toISOString().slice(0, 10);
+    setAns(pre);
     setQnSnap(s.questionnaire);
     setPage(0); setErr(''); setErrQ(null); setStartedAt(Date.now()); setElapsed(0); setScreen('consent');
     startRecording();
@@ -144,30 +156,35 @@ function FieldAppInner({ mode = 'preview' }) {
     // Demo switches only apply in demo mode. Real fieldwork always records the true time, location and consent.
     const realSecs = Math.max(1, Math.floor((Date.now() - startedAt) / 1000));
     const dur = demo && realDuration && !app ? 840 + Math.floor(Math.random() * 300) : (demo && app ? Math.max(realSecs, 840 + Math.floor(Math.random() * 300)) : realSecs);
-    const loc = BOOTH_BY_ID[ans.q_loc.booth] || booth;
-    const gpsQ = qn.groups.flatMap((g) => g.questions).find((x) => x.type === 'gps');
+    const allQs = qn.groups.flatMap((g) => g.questions);
+    const locQ = allQs.find((x) => x.type === 'cascade');
+    const loc = BOOTH_BY_ID[locQ && ans[locQ.id]?.booth] || booth;
+    const gpsQ = allQs.find((x) => x.type === 'gps');
     const gpsAns = gpsQ ? ans[gpsQ.id] : null;
     if (!(demo && atHome && !app) && !gpsAns) { setErr('Capture the GPS location before sending (last page).'); return; }
     const gps = demo && atHome && !app ? { lat: loc.lat + 0.07, lng: loc.lng - 0.05, acc: 8 } : gpsAns;
     const shown = new Set(qn.groups.flatMap((g) => g.questions).filter((q) => isVisible(q, ans)).map((q) => q.id));
     const kept = Object.fromEntries(Object.entries(ans).filter(([k]) => shown.has(k) || shown.has(k.replace(/_other$/, ''))));
-    const id = `INT-F${String(Date.now()).slice(-6)}`;
+    const id = newInterviewId(sv.id); // unique across all phones (the server ignores a repeated id)
     const rec = {
       id, round: 3, surveyId: s.surveyId || 'TSP-R3', surveyorId: sv.id, boothId: loc.id, mandalId: loc.mandalId, constituencyId: loc.constituencyId,
       startedAt: Date.now() - dur * 1000, durationSec: dur, gps,
       consent: { agreed: true, audio: recMode === 'real', consentRead: !(demo && skipConsent && !app), recordingSec: recMode === 'real' ? dur + 10 : 0 },
       device: /iPhone|iPad|Mac/.test(navigator.userAgent) ? 'iOS · Pulse 2.4.1' : 'Android · Pulse 2.4.1',
-      answers: { ...kept, q_photo: !!ans.q_photo, q_gps: { lat: gps.lat, lng: gps.lng, acc: gps.acc } },
+      // Photos are recorded as taken / not taken (the image itself is not uploaded yet)
+      answers: {
+        ...kept,
+        ...Object.fromEntries(allQs.filter((x) => x.type === 'photo' && shown.has(x.id)).map((x) => [x.id, !!ans[x.id]])),
+        ...(gpsQ ? { [gpsQ.id]: { lat: gps.lat, lng: gps.lng, acc: gps.acc } } : {}),
+      },
       source: 'Pulse Field app', syncedAt: Date.now(), fromFieldApp: true,
     };
     if (audioUrl) AUDIO.set(id, audioUrl);
     setLastId(id);
-    if (s.deviceOnline) {
-      const ok = await s.addInterview(rec);
-      if (ok) s.toast('Interview sent to MSR Pulse', 'success');
-    } else {
-      s.update((st) => ({ outbox: [...st.outbox, rec] }));
-    }
+    // Saved on the phone first, then sent; it stays on the phone until the server confirms it
+    const result = await s.addInterview(rec, { offline: !s.deviceOnline });
+    if (result === 'sent') s.toast('Interview sent to MSR Pulse', 'success');
+    setSaveResult(result);
     setQnSnap(null);
     setScreen('done');
   };
@@ -176,17 +193,22 @@ function FieldAppInner({ mode = 'preview' }) {
   const tg = s.targets[boothId] || defaultTargets(booth);
   const quotaWarn = (() => {
     const w = [];
-    if (ans.q_gender && prog.gender[ans.q_gender] >= tg.gender[ans.q_gender]) w.push(ans.q_gender);
-    if (ans.q_age >= 18) { const ab = ageBand(ans.q_age); if (prog.age[ab] >= tg.age[ab]) w.push(`age ${ab}`); }
-    if (ans.q_caste && prog.caste[ans.q_caste] >= tg.caste[ans.q_caste]) w.push(ans.q_caste);
+    const g = A({ answers: ans }, 'gender');
+    const age = A({ answers: ans }, 'age');
+    const c = A({ answers: ans }, 'caste');
+    if (g && tg.gender?.[g] !== undefined && (prog.gender[g] || 0) >= tg.gender[g]) w.push(g);
+    if (age >= 18) { const ab = ageBand(age); if (tg.age?.[ab] !== undefined && (prog.age[ab] || 0) >= tg.age[ab]) w.push(`age ${ab}`); }
+    if (c && tg.caste?.[c] !== undefined && (prog.caste[c] || 0) >= tg.caste[c]) w.push(c);
     return w;
   })();
+  // The quota warning shows on the page that asks the quota questions
+  const quotaPage = qn.groups.findIndex((g) => g.questions.some((x) => [R('gender'), R('age'), R('caste')].includes(x.id)));
   const needs = [
-    ...Object.entries(tg.gender).map(([k, v]) => [k, v - (prog.gender[k] || 0)]),
-    ...Object.entries(tg.age).map(([k, v]) => [`Age ${k}`, v - (prog.age[k] || 0)]),
-    ...Object.entries(tg.caste).map(([k, v]) => [k, v - (prog.caste[k] || 0)]),
+    ...Object.entries(tg.gender || {}).map(([k, v]) => [k, v - (prog.gender[k] || 0)]),
+    ...Object.entries(tg.age || {}).map(([k, v]) => [`Age ${k}`, v - (prog.age[k] || 0)]),
+    ...Object.entries(tg.caste || {}).map(([k, v]) => [k, v - (prog.caste[k] || 0)]),
   ].filter(([, v]) => v > 0);
-  const savedOnline = s.deviceOnline && !s.outbox.some((o) => o.id === lastId);
+  const savedOnline = saveResult === 'sent' && !s.outbox.some((o) => o.id === lastId);
 
   const InterviewRow = ({ i }) => {
     const pending = s.outbox.some((o) => o.id === i.id);
@@ -194,9 +216,9 @@ function FieldAppInner({ mode = 'preview' }) {
     const flagged = qq && qq.score >= 40;
     return (
       <div className="fa-card row nowrap" style={{ padding: '11px 13px', marginBottom: 8 }}>
-        <div className="avatar" style={{ width: 34, height: 34, fontSize: 11, background: i.answers.q_gender === 'Female' ? '#db2777' : '#2563eb' }}>{i.answers.q_gender?.[0] || '?'}</div>
+        <div className="avatar" style={{ width: 34, height: 34, fontSize: 11, background: /^f/i.test(A(i, 'gender') || '') ? '#db2777' : '#2563eb' }}>{String(A(i, 'gender') || '?')[0]}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="bold small">{i.answers.q_gender}, {i.answers.q_age} yrs · {i.answers.q_caste}</div>
+          <div className="bold small">{[A(i, 'gender'), A(i, 'age') !== undefined ? `${A(i, 'age')} yrs` : null, A(i, 'caste')].filter(Boolean).join(' · ') || 'Interview'}</div>
           <div className="tiny muted">{fmtClock(i.startedAt)} · {Math.max(1, Math.round(i.durationSec / 60))} min · {i.id}</div>
         </div>
         {pending ? <Badge tone="amber"><CloudUpload size={11} />Waiting</Badge> : flagged ? <Badge tone="red">Under review</Badge> : <Badge tone="green"><CheckCircle2 size={11} />Sent</Badge>}
@@ -337,7 +359,7 @@ function FieldAppInner({ mode = 'preview' }) {
                   fallbackGps={booth} realGps={app || !demo} allowDemoLocation={demo} />
               </div>
             ))}
-            {page === 1 && quotaWarn.length > 0 && (
+            {page === quotaPage && quotaWarn.length > 0 && (
               <div className="callout amber small"><AlertTriangle size={15} style={{ flexShrink: 0 }} /><div>Target already met at this booth for <b>{quotaWarn.join(', ')}</b>. Continue only if your supervisor agrees.</div></div>
             )}
           </div>
@@ -357,9 +379,11 @@ function FieldAppInner({ mode = 'preview' }) {
             <div style={{ width: 84, height: 84, borderRadius: '50%', background: savedOnline ? '#dcfce7' : '#fef3c7', display: 'grid', placeItems: 'center', margin: '0 auto' }}>
               {savedOnline ? <CheckCircle2 size={44} color="#16a34a" /> : <CloudUpload size={40} color="#b45309" />}
             </div>
-            <h2 style={{ marginTop: 16, fontSize: 22 }}>{savedOnline ? 'Interview sent' : 'Interview saved'}</h2>
+            <h2 style={{ marginTop: 16, fontSize: 22 }}>{savedOnline ? 'Interview sent' : saveResult === 'unsaved' ? 'Not saved on this phone' : 'Interview saved'}</h2>
             <p className="muted" style={{ maxWidth: 290, margin: '8px auto' }}>
-              {savedOnline ? 'It has reached MSR Pulse and been checked. Thank you!' : 'No internet right now. It is safely saved on this phone and will be sent automatically when internet returns. You can close the app.'}
+              {savedOnline ? 'It has reached MSR Pulse and been checked. Thank you!'
+                : saveResult === 'unsaved' ? 'This phone could not store the interview (storage may be full). Do NOT close the app. Connect to the internet and tap Send on the home screen, or call your supervisor.'
+                  : 'It is safely saved on this phone and will be sent automatically when internet returns. You can close the app.'}
             </p>
             <div className="mono tiny muted">{lastId}</div>
             {AUDIO.get(lastId) && <audio controls src={AUDIO.get(lastId)} style={{ width: 260, marginTop: 10 }} />}
@@ -394,7 +418,7 @@ function FieldAppInner({ mode = 'preview' }) {
             <div className="stack" style={{ gap: 14 }}>
               <div className="field"><label>Show the app as surveyor</label>
                 <select className="select" value={svId} onChange={(e) => { setSvId(e.target.value); setScreen('home'); }}>
-                  {surveyorsOnly.map((x) => <option key={x.id} value={x.id}>{x.name} · {BOOTH_BY_ID[x.boothIds[0]].short}, {CONST_BY_ID[x.constituencyId].name.en}</option>)}
+                  {surveyorsOnly.map((x) => <option key={x.id} value={x.id}>{x.name} · {BOOTH_BY_ID[x.boothIds[0]]?.short || x.boothIds[0]}, {CONST_BY_ID[x.constituencyId]?.name.en || x.constituencyId}</option>)}
                 </select>
               </div>
               <div className="row"><Toggle on={s.deviceOnline} onChange={(v) => s.update({ deviceOnline: v })} label={s.deviceOnline ? 'Phone has internet' : 'Phone is offline'} /></div>

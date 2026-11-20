@@ -3,9 +3,10 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { allQuestions, optionLabel } from '../data/questionnaire.js';
-import { CONST_BY_ID, MANDAL_BY_ID, BOOTH_BY_ID, ageBand } from '../data/geo.js';
+import { GEO, CONST_BY_ID, MANDAL_BY_ID, BOOTH_BY_ID, ageBand } from '../data/geo.js';
 import { frequency } from './analytics.js';
 import { codeFor } from './privacy.js';
+import { piiQuestions, piiKind, A } from './roles.js';
 
 const NAVY = [30, 58, 95];
 const TEAL = [13, 148, 136];
@@ -28,9 +29,10 @@ function answerText(q, v) {
 export function exportResultsExcel(qn, list, { privacy = true, title = 'MSR-Pulse-Results' } = {}) {
   const wb = XLSX.utils.book_new();
   const qs = allQuestions(qn);
+  const pii = new Set(piiQuestions(qn));
   // Summary sheet: every question's frequency table
   const rows = [[qn.title.en], [`Base: ${list.length} interviews`, `Exported ${new Date().toLocaleString('en-IN')}`], []];
-  qs.filter((q) => !q.pii).forEach((q) => {
+  qs.filter((q) => !pii.has(q.id)).forEach((q) => {
     const f = frequency(qn, q.id, list);
     if (!f) return;
     rows.push([`${q.id.toUpperCase()} · ${q.label.en}`, `Base ${f.base}`]);
@@ -40,7 +42,8 @@ export function exportResultsExcel(qn, list, { privacy = true, title = 'MSR-Puls
       if (f.mean !== undefined) rows.push(['Average', Number(f.mean.toFixed(2))]);
     }
     if (f.gridRows) {
-      rows.push(['Item', ...f.gridRows[0].dist.map((d) => d.label + ' %'), 'Average (1-5)']);
+      if (!f.gridRows.length) { rows.push([]); return; }
+      rows.push(['Item', ...f.gridRows[0].dist.map((d) => d.label + ' %'), `Average (1-${f.gridRows[0].dist.length})`]);
       f.gridRows.forEach((g) => rows.push([g.label, ...g.dist.map((d) => Number(d.pct.toFixed(1))), Number(g.mean.toFixed(2))]));
     }
     if (f.samples) f.samples.forEach((s) => rows.push([privacy ? codeFor(s.value) : s.value]));
@@ -53,10 +56,10 @@ export function exportResultsExcel(qn, list, { privacy = true, title = 'MSR-Puls
   const header = ['Interview ID', 'Constituency', 'Mandal', 'Booth', 'Surveyor', 'Start time', 'Duration (min)', 'Age group', ...qs.map((q) => q.label.en)];
   const data = list.map((i) => [
     i.id, CONST_BY_ID[i.constituencyId]?.name.en, MANDAL_BY_ID[i.mandalId]?.name.en, BOOTH_BY_ID[i.boothId]?.short, i.surveyorId,
-    new Date(i.startedAt).toLocaleString('en-IN'), Number((i.durationSec / 60).toFixed(1)), ageBand(i.answers.q_age),
+    new Date(i.startedAt).toLocaleString('en-IN'), Number((i.durationSec / 60).toFixed(1)), ageBand(A(i, 'age', qn)) || '',
     ...qs.map((q) => {
       const v = i.answers[q.id];
-      if (q.pii && privacy) return codeFor(v, q.id === 'q_phone' ? 'phone' : 'name');
+      if (pii.has(q.id) && privacy) return codeFor(v, piiKind(qn, q.id));
       return answerText(q, v);
     }),
   ]);
@@ -72,8 +75,9 @@ export function exportTableExcel(sheetName, header, rows, fileName) {
 
 export function downloadSurveyorTemplate() {
   exportTableExcel('Surveyors', ['Name', 'Mobile', 'Gender', 'Role', 'Constituency code', 'Booth IDs (comma separated)', 'Device'], [
-    ['Ravi Kumar', '9876543210', 'Male', 'Surveyor', 'KNR', 'KNR-101', 'Android'],
-    ['Swathi Reddy', '9123456780', 'Female', 'Surveyor', 'WGW', 'WGW-102,WGW-103', 'iPhone'],
+    // Examples use booths from the current booth list, so the IDs are ones that will be accepted
+    ['Ravi Kumar', '9876543210', 'Male', 'Surveyor', GEO.booths[0]?.constituencyId || 'KNR', GEO.booths[0]?.id || 'KNR-101', 'Android'],
+    ['Swathi Reddy', '9123456780', 'Female', 'Surveyor', GEO.booths[1]?.constituencyId || 'KNR', [GEO.booths[1]?.id, GEO.booths[2]?.id].filter(Boolean).join(',') || 'KNR-102', 'iPhone'],
   ], 'MSR-Pulse-Surveyor-Template.xlsx');
 }
 

@@ -4,8 +4,10 @@ import { GitCompareArrows, FileDown, ArrowUpRight, ArrowDownRight, Minus } from 
 import { useStore } from '../../store.jsx';
 import { PageHead, Card, Tabs, Badge } from '../../components/ui.jsx';
 import { Stacked, Grouped, colorFor } from '../../components/charts.jsx';
-import { crosstab, compareRounds, DIMENSIONS, keyLabel, applyFilters, frequency } from '../../lib/analytics.js';
-import { allQuestions } from '../../data/questionnaire.js';
+import { crosstab, compareRounds, dimensions, keyLabel, applyFilters, frequency } from '../../lib/analytics.js';
+import { allQuestions, findQuestion } from '../../data/questionnaire.js';
+import { mainQuestionId } from '../../lib/reportGen.js';
+import { piiQuestions } from '../../lib/roles.js';
 import { exportComparePdf } from '../../lib/exporters.js';
 import { Filters } from './Results.jsx';
 
@@ -18,21 +20,30 @@ export default function Compare() {
   const s = useStore();
   const qn = s.questionnaire;
   const [tab, setTab] = useState('cross');
-  const choiceQs = allQuestions(qn).filter((q) => (q.type === 'single' || q.type === 'multiple') && !q.pii && q.id !== 'q_consent');
-  const [rowKey, setRowKey] = useState('q_gender');
-  const [colKey, setColKey] = useState('q_vote_intent');
-  const [rq, setRq] = useState('q_vote_intent');
+  const pii = new Set(piiQuestions(qn));
+  const choiceQs = allQuestions(qn).filter((q) => (q.type === 'single' || q.type === 'multiple') && !pii.has(q.id) && !q.endIf);
+  const dims = dimensions(qn);
+  const mainId = mainQuestionId(qn) || choiceQs[0]?.id || '';
+  const [rowPick, setRowKey] = useState(null);
+  const [colPick, setColKey] = useState(null);
+  const [rqPick, setRq] = useState(null);
+  // Defaults: main result by the first profile breakdown; stale picks (after switching survey) fall back to these
+  const ok = (id) => choiceQs.some((q) => q.id === id);
+  const rowKey = rowPick && (ok(rowPick) || dims.some((d) => d.key === rowPick)) ? rowPick : (dims[2] || dims[0]).key;
+  const colKey = ok(colPick) ? colPick : mainId;
+  const rq = ok(rqPick) ? rqPick : mainId;
   const [prevRound, setPrevRound] = useState('2');
   const [f, setF] = useState({});
   const list = useMemo(() => applyFilters(s.valid, f), [s.valid, f]);
   const prev = useMemo(() => applyFilters(prevRound === '1' ? s.round1 : s.round2, f), [prevRound, s.round1, s.round2, f]);
-  const ct = useMemo(() => crosstab(qn, rowKey, colKey, list, s.lang), [qn, rowKey, colKey, list, s.lang]);
-  const cmp = useMemo(() => compareRounds(qn, rq, list, prev, s.lang), [qn, rq, list, prev, s.lang]);
+  const ct = useMemo(() => (colKey ? crosstab(qn, rowKey, colKey, list, s.lang) : { rows: [], cols: [] }), [qn, rowKey, colKey, list, s.lang]);
+  const cmp = useMemo(() => (rq && compareRounds(qn, rq, list, prev, s.lang)) || [], [qn, rq, list, prev, s.lang]);
   const trend = useMemo(() => {
-    const rounds = [...(s.round1.length ? [['May (R1)', s.round1]] : []), ['Aug (R2)', s.round2], ['Nov (R3)', s.valid]];
-    return rounds.map(([label, l]) => ({ label, ...Object.fromEntries(frequency(qn, 'q_vote_intent', applyFilters(l, f)).rows.map((r) => [r.key, Number(r.pct.toFixed(1))])) }));
-  }, [qn, s.round1, s.round2, s.valid, f]);
-  const rowOptions = [...DIMENSIONS.map((d) => ({ key: d.key, label: `◆ ${d.en}` })), ...choiceQs.map((q) => ({ key: q.id, label: q.label.en }))];
+    const rounds = [...(s.round1.length ? [['Round 1', s.round1]] : []), ...(s.round2.length ? [['Round 2', s.round2]] : []), ['This round', s.valid]];
+    return rounds.map(([label, l]) => ({ label, ...Object.fromEntries((frequency(qn, mainId, applyFilters(l, f))?.rows || []).map((r) => [r.key, Number(r.pct.toFixed(1))])) }));
+  }, [qn, mainId, s.round1, s.round2, s.valid, f]);
+  const trendLines = (findQuestion(qn, mainId)?.options || []).filter((o) => !/^(ns|dk)$/i.test(o.v)).slice(0, 6);
+  const rowOptions = [...dims.map((d) => ({ key: d.key, label: `◆ ${d.en}` })), ...choiceQs.filter((q) => !dims.some((d) => d.key === q.id)).map((q) => ({ key: q.id, label: q.label.en }))];
 
   const pdfCross = () => exportComparePdf({
     title: `${keyLabel(qn, colKey)} by ${keyLabel(qn, rowKey)}`.slice(0, 90),
@@ -113,7 +124,7 @@ export default function Compare() {
       )}
 
       {tab === 'trend' && (
-        <Card title="Vote intention across rounds" sub={s.round1.length ? 'Round 1 was brought in from GoSurvey' : 'Import Round 1 from GoSurvey (add-on) to extend this trend'}>
+        <Card title={`${findQuestion(qn, mainId)?.label.en || 'Main result'} across rounds`}sub={s.round1.length ? 'Round 1 was brought in from GoSurvey' : 'Import Round 1 from GoSurvey (add-on) to extend this trend'}>
           <div style={{ height: 340 }}>
             <ResponsiveContainer>
               <LineChart data={trend} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
@@ -122,7 +133,7 @@ export default function Compare() {
                 <YAxis tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} unit="%" />
                 <Tooltip formatter={(v) => `${v}%`} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                {['A', 'B', 'C', 'UND'].map((k) => <Line key={k} dataKey={k} name={k === 'UND' ? 'Undecided' : `Party ${k}`} stroke={colorFor('q_vote_intent', k)} strokeWidth={3} dot={{ r: 5 }} />)}
+                {trendLines.map((o, k) => <Line key={o.v} dataKey={o.v} name={o.en} stroke={colorFor(mainId, o.v, k)} strokeWidth={3} dot={{ r: 5 }} />)}
               </LineChart>
             </ResponsiveContainer>
           </div>

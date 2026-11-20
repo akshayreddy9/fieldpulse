@@ -28,7 +28,7 @@ export default function Checker() {
             {list.map((i) => (
               <div key={i.id} className="list-item click" style={{ background: cur?.id === i.id ? '#eefaf8' : undefined }} onClick={() => setSel(i.id)}>
                 <Mic size={16} className="muted" />
-                <div style={{ flex: 1, minWidth: 0 }}><div className="small bold">{i.id}</div><div className="tiny muted">{i.surveyorId} · {BOOTH_BY_ID[i.boothId].short} · {Math.round(i.consent.recordingSec / 60)} min</div></div>
+                <div style={{ flex: 1, minWidth: 0 }}><div className="small bold">{i.id}</div><div className="tiny muted">{i.surveyorId} · {BOOTH_BY_ID[i.boothId]?.short} · {Math.round(i.consent.recordingSec / 60)} min</div></div>
                 {i.consent.consentRead ? <Badge tone="green">Consent ✓</Badge> : <Badge tone="red">No consent line</Badge>}
               </div>
             ))}

@@ -3,12 +3,17 @@ import { Plug, KeyRound, Plus, Copy, Webhook, Trash2, ShieldCheck } from 'lucide
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useStore } from '../../store.jsx';
 import { PageHead, Card, Badge, Modal } from '../../components/ui.jsx';
+import { mainQuestionId } from '../../lib/reportGen.js';
+import { findQuestion } from '../../data/questionnaire.js';
+import { GEO } from '../../data/geo.js';
 
 const SCOPES = ['results:read', 'interviews:read', 'reports:read', 'rollup:read'];
 const usage = ['12', '13', '14', '15', '16', '17', '18'].map((d, k) => ({ d: `${d} Nov`, calls: [120, 340, 410, 380, 520, 610, 450][k] }));
 
 export default function Api() {
   const s = useStore();
+  const exampleQ = mainQuestionId(s.questionnaire) || 'QUESTION-ID';
+  const exampleCols = (findQuestion(s.questionnaire, exampleQ)?.options || []).slice(0, 4).map((o, k) => `"${o.v}": ${[31.2, 27.5, 22.4, 9.8][k]}`).join(', ') || '"…": 0';
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [scopes, setScopes] = useState(['results:read']);
@@ -39,20 +44,21 @@ export default function Api() {
             </table>
           </Card>
           <Card title="Example request">
-            <div className="code-block">{`curl ${window.location.origin}/api/v1/surveys/TSP-R3/results?question=q_vote_intent&level=constituency \\
+            <div className="code-block">{`curl ${window.location.origin}/api/v1/surveys/${s.surveyId || 'SURVEY-ID'}/results?question=${exampleQ}&level=constituency \\
   -H "Authorization: Bearer msrp_live_••••••••"
 
 {
-  "survey": "TSP-R3",
-  "question": "q_vote_intent",
+  "survey": "${s.surveyId || 'SURVEY-ID'}",
+  "question": "${exampleQ}",
   "base": ${s.valid.length},
   "level": "constituency",
   "results": [
-    { "area": "Karimnagar", "A": 29.9, "B": 25.6, "C": 29.7, "UND": 8.1 },
+    { "area": "${GEO.constituencies[0]?.name.en || 'Constituency'}", ${exampleCols} },
     ...
   ],
   "personal_data": "never included"
 }`}</div>
+            <div className="tiny muted mt8">Leave out <span className="mono">question</span> to get the survey's “Main result” question.</div>
           </Card>
         </div>
         <div className="stack">

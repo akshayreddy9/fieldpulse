@@ -125,7 +125,8 @@ export function Toasts() {
 const REASONS = ['Back-check call to respondent', 'Respondent asked for their data (DPDP request)', 'Investigating suspected fake interview', 'Client contractual requirement', 'Other'];
 
 // Personal details: shown as codes when the privacy lock is on. Revealing needs a reason and is logged.
-export function PII({ value, kind = 'name', interviewId }) {
+// question: the questionnaire question this value comes from (so any personal-detail question can be revealed)
+export function PII({ value, kind = 'name', interviewId, question }) {
   const { privacyLock, can, toast, revealPii } = useStore();
   const [shown, setShown] = useState(null);
   const [asking, setAsking] = useState(false);
@@ -142,7 +143,7 @@ export function PII({ value, kind = 'name', interviewId }) {
   if (shown) return <span className="pii"><span className="revealed">{shown}</span><span className="tiny faint">auto-hides in 30s</span></span>;
   const confirm = async () => {
     try {
-      const real = await revealPii(interviewId, kind, reason === 'Other' ? note || 'Other' : reason, value);
+      const real = await revealPii(interviewId, kind, reason === 'Other' ? note || 'Other' : reason, value, question);
       setAsking(false);
       setShown(real || '—');
       toast('Access recorded in the privacy log', 'success');

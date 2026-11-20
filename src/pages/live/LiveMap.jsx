@@ -62,7 +62,7 @@ export default function LiveMap() {
                     <Popup>
                       <div style={{ minWidth: 180 }}>
                         <b>{i.id}</b> <StatusBadge s={st} /><br />
-                        {BOOTH_BY_ID[i.boothId].short}, {MANDAL_BY_ID[i.mandalId].name.en}<br />
+                        {BOOTH_BY_ID[i.boothId]?.short}, {MANDAL_BY_ID[i.mandalId]?.name.en}<br />
                         {i.surveyorId} · {fmtClock(i.startedAt)} · {Math.round(i.durationSec / 60)} min<br />
                         {s.quality[i.id]?.flags.map((f) => <div key={f.id} style={{ color: '#be123c' }}>⚑ {f.detail}</div>)}
                       </div>
@@ -95,7 +95,7 @@ export default function LiveMap() {
                   <span className="dot" style={{ background: STATUS_COLOR[s.statusOf(i.id)], flexShrink: 0 }} />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="small bold">{i.id} {i.fromFieldApp && <Badge tone="teal">field app</Badge>}</div>
-                    <div className="tiny muted">{BOOTH_BY_ID[i.boothId].short}, {CONST_BY_ID[i.constituencyId].name.en} · {i.surveyorId}</div>
+                    <div className="tiny muted">{BOOTH_BY_ID[i.boothId]?.short}, {CONST_BY_ID[i.constituencyId]?.name.en} · {i.surveyorId}</div>
                     {q?.flags.length > 0 && <div className="tiny" style={{ color: 'var(--red)' }}>{q.flags.map((f) => f.detail).join(' · ')}</div>}
                   </div>
                   <span className="tiny muted">{fmtClock(i.syncedAt)}</span>

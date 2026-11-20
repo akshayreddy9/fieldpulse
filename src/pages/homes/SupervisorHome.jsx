@@ -56,7 +56,7 @@ export default function SupervisorHome() {
             <div key={i.id} className={`list-item ${s.can('live.alerts') ? 'click' : ''}`} onClick={() => go(`/live/alerts?id=${i.id}`, 'live.alerts')}>
               <Risk q={s.quality[i.id]} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="small bold">{s.surveyors.find((x) => x.id === i.surveyorId)?.name} · {BOOTH_BY_ID[i.boothId].short}</div>
+                <div className="small bold">{s.surveyors.find((x) => x.id === i.surveyorId)?.name} · {BOOTH_BY_ID[i.boothId]?.short}</div>
                 <div className="tiny muted">{s.quality[i.id].flags.map((f) => RULE_BY_ID[f.id].name).join(' · ')}</div>
               </div>
               <span className="tiny muted">{fmtClock(i.startedAt)}</span>

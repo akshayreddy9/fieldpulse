@@ -4,7 +4,7 @@
 > Read this file first. It explains what exists, what is done, what is left, and the rules to follow.
 > Open other files only when a task needs them. Update the "Status" and "Remaining work" sections after notable changes.
 >
-> Last updated: **2026-11-19**
+> Last updated: **2026-11-20**
 
 ---
 
@@ -56,17 +56,22 @@ replacing their use of GoSurvey. One system from questionnaire to client report.
 src/
   store.jsx                 all app state, server sync, offline cache, outbox, survey switching, permissions (MODULES)
   lib/api.js                server address, connect/detect server, stage (test-site) password header
-  lib/quality.js            fake-interview detection rules (0-100 risk score)
+  lib/roles.js              QUESTION ROLES: which question is Gender/Age/Caste/Occupation/Name/Mobile/Main result/... (q.role,
+                            set in the builder's "Used for"); falls back to the starter ids (q_gender, q_vote_intent...). Use
+                            R('gender') / A(interview,'gender') / rolesOf(qn) - NEVER hard-code question ids in screens.
+  lib/outbox.js             phone outbox in IndexedDB (save first, delete only after server confirms), unique interview ids
+  lib/quality.js            fake-interview detection rules (0-100 risk score); assessAll(list, questionnaire)
   lib/analytics.js, nlq.js, reportGen.js, exporters.js (Excel/PDF), privacy.js (PII masking), audio.js
   data/questionnaire.js     SAMPLE_QUESTIONNAIRE, question types, isVisible (skip logic), describeRule
-  data/geo.js               6 constituencies, 18 mandals, 72 booths (sample geography)
+  data/geo.js               booth list registry: setGeo() fills GEO / *_BY_ID in place; geoFromRows() reads the Excel upload;
+                            sample list = 6 constituencies, 18 mandals, 72 booths (test sites only; production starts empty)
   data/generate.js          sample interview / surveyor generator (demo data)
   components/Layout.jsx     role menus, survey switcher, shells for surveyor/client
   components/QuestionRenderer.jsx  renders every question type incl. GPS and photo; validateAnswer
   components/ui.jsx, charts.jsx, InterviewReview.jsx
   pages/Login.jsx           phone+OTP login, server connect, demo accounts, APK download
   pages/field/FieldApp.jsx  surveyor app (mode "app") and admin phone preview (mode "preview")
-  pages/admin/              Surveys, Builder (questionnaire), Targets, Team (surveyors), PeopleLogins, Access
+  pages/admin/              Surveys, Builder (questionnaire), Booths (booth list upload), Targets, Team (surveyors), PeopleLogins, Access
   pages/live/               LiveMap, Alerts (review queue), Digest
   pages/insights/           Results, Rollup, Compare, Ask, Report
   pages/addons/             Privacy lock, Checker (AI interview checker), Import (Round 1), Api (public API + webhooks)
@@ -78,7 +83,7 @@ server/
   db.js                     schema, migrations, seed (sample or production), SURVEY_KEYS (per-survey settings)
   permissions.js            role defaults, STATE_RULES (who may change what), READABLE
   auth.js, sms.js (console or webhook SMS gateway), ai.js, backup.js
-  test/api.test.js, test/surveys.test.js   23 automated tests (node --test)
+  test/api.test.js, test/surveys.test.js, test/booths-roles.test.js   32 automated tests (node --test)
 deploy/aws/msr-pulse-aws.yaml   CloudFormation template for the whole AWS setup
 deploy/aws/update-live-site.ps1 upload release + install on server (one step)
 deploy/aws/remote.ps1           run a shell command on the server via AWS Systems Manager (no SSH)
@@ -90,6 +95,8 @@ MSR-Pulse-Test-Checklist.xlsx   68 manual tests for testers
 ```
 
 **Key data concepts**
+- Booth list = shared setting `geo` (admins only; Set up > Booth list, Excel upload). `null` = sample booths (test sites),
+  `{ empty: true }` = production before upload. Booth IDs are `<CONSTITUENCY CODE>-<booth no, 3 digits>`, e.g. `KNR-101`.
 - Shared settings are key/value. Per-survey keys are stored as `survey:<surveyId>:<key>`; list in `SURVEY_KEYS` (db.js):
   `questionnaire, draftQuestionnaire, publishedVersion, targets, statuses, notes, report, reportStatus, reportHistory, round1Imported`.
 - To add a new synced key: add it to `SURVEY_KEYS` (if per survey), `STATE_RULES` (permissions.js), and `SYNC_KEYS`/`SURVEY_SYNC` (store.jsx).
@@ -111,7 +118,8 @@ Project folder: `C:\Users\akashreddy1\OneDrive\Desktop\MSR`
 | Task | Command |
 |---|---|
 | Install | `npm install` |
-| Automated tests (must pass) | `npm test` → 23 tests |
+| Automated tests (must pass) | `npm test` → 32 tests |
+| Version control | git repo in the project folder (branch `main`). Commit after each change; `git log` shows history |
 | Build web app | `npx vite build` (output `dist/`) |
 | Local server with demo data | `DEMO_MODE=1 node server/index.js` → http://localhost:8787 (Git Bash syntax; delete `data/msr-pulse.db` for a fresh seed) |
 | Dev mode with hot reload | `npm run dev` (Vite on 5173, proxies /api to 8787) |
@@ -176,16 +184,33 @@ Dashboard actions; builder draft with Save/Publish/Discard and unsaved warning; 
 no GPS question; continuous question numbering in preview; plain-language skip-logic editor; delete page; honest version history;
 team add/edit with login handling.
 
+**Round 2026-11-20 (NOT yet deployed to the test site, APK not rebuilt):**
+- Git repository created (baseline commit = 2026-11-19 handoff state). Fixed `.gitignore` (`data/` also hid `src/data/`).
+- Real surveys now possible: booth list upload from Excel (Set up > Booth list, with checks and preview); question roles
+  ("Used for" in the builder) used by quotas, targets, filters, fake-interview checks, privacy masking/reveal/retention,
+  roll-up, compare, ask-the-data, AI prompt, public API and report. Screens no longer crash on a questionnaire without the
+  sample questions. Production install starts with no booths (never the sample ones).
+- Report draft: every sentence now computed from data (removed pre-written claims about Nalgonda/electricity/young voters).
+- Phone outbox: IndexedDB, saved before sending, deleted only after the server confirms, retried every 30 s, one bad
+  interview no longer blocks the rest, honest "not saved" screen if phone storage fails. Interview ids are now unique
+  (old 6-digit ids could collide and the server silently dropped the second interview).
+- One crashing screen no longer blanks the whole app (error boundary). Evening digest crash with a non-sample booth list fixed.
+
 **Demo-only / simulated parts (be honest with the client about these):**
 - AI interview checker transcript on the review screen is simulated (no speech-to-text yet).
 - "Demo feed" button streams generated interviews (test mode only).
 - SMS is printed to the server log unless an SMS gateway is configured; demo OTP is 482913.
 - Audio recordings stay on the phone (not uploaded to the server yet).
+- Photos are recorded only as "taken / not taken"; the image is not uploaded.
+- Evening digest "Send now" does not send anything yet (it says so); supervisors get the Excel back-check list.
+- "Round 1/2" comparison data and the GoSurvey import are generated sample data.
 
 ---
 
 ## 8. Remaining work (in order)
 
+0. **Ship the 2026-11-20 round:** rebuild the APK (phone screens changed), `make-release.bat`, deploy (ask the owner first).
+   Add checklist rows for: booth list upload, "Used for" marks, offline interview then back online.
 1. **Testing week (now):** owner's friends test with `MSR-Pulse-Test-Checklist.xlsx`; fix reported bugs; redeploy.
 2. **Go live with an empty system:** remove sample data (`msr-go-live` / `SEED_SAMPLE=0`, `DEMO_MODE` off); remove the site password only after real SMS logins work.
 3. **Move to MSR's own AWS account in Mumbai (ap-south-1)** — client requirement: MSR owns code and data, data stays in India.
@@ -193,12 +218,16 @@ team add/edit with login handling.
    bucket are set to Retain).
 4. **Needed before real fieldwork:** Indian DLT-registered SMS gateway for OTP (plug into `server/sms.js` webhook), a proper domain name
    (e.g. pulse.msr…), CERT-In / security audit, release-signed APK (and Google Play listing if wanted), iPhone: PWA now, App Store later.
-5. **Nice to have / client may ask:** upload audio to S3 (encrypted), encrypt data on the phone, send the daily digest by email/WhatsApp,
-   real GoSurvey/Round-1 import from files, Telugu speech-to-text for the interview checker, iOS native build.
+5. **Next upgrades (agreed list):** upload audio + photos to S3 (encrypted); send the evening digest for real (SMS/WhatsApp/email);
+   server-side totals + pagination (today every interview is downloaded to the browser - fine for ~2,000, slow at 50,000+;
+   consider Postgres/RDS in Mumbai); real GoSurvey import from files; Telugu speech-to-text for the interview checker;
+   encrypt data on the phone; iOS native build.
 6. At the end of the demo, ask the owner whether to keep or clean up the Sydney AWS resources (cost).
 
 ## 9. Known limits / watch-outs
-- Sample geography (6 constituencies, 72 booths) is demo data; real booth master must be loaded before going live.
+- Sample geography (6 constituencies, 72 booths) is demo data; load MSR's real booth list (Set up > Booth list) before going live.
+  The booth list is shared by all surveys. Surveyors/targets pointing at booths not in the list are flagged on upload.
+- Survey rounds are still fixed as round 3 = current, 2 = previous, 1 = imported (data model), labels are generic now.
 - `surveyors` (team list) is shared across all surveys, not per survey.
 - Free sslip.io HTTPS name is fine for testing; use a real domain for production.
 - t3.small is enough for testing; review size and cost before real fieldwork.

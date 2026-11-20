@@ -76,7 +76,7 @@ export default function Alerts() {
                 <div key={i.id} className="list-item click" style={{ background: selected?.id === i.id ? '#eefaf8' : undefined }} onClick={() => setSel(i.id)}>
                   <Risk q={s.quality[i.id]} />
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div className="row nowrap"><span className="bold small">{i.id}</span><span className="tiny muted">{i.surveyorId} · {BOOTH_BY_ID[i.boothId].short}, {i.constituencyId}</span></div>
+                    <div className="row nowrap"><span className="bold small">{i.id}</span><span className="tiny muted">{i.surveyorId} · {BOOTH_BY_ID[i.boothId]?.short}, {i.constituencyId}</span></div>
                     <div className="row" style={{ gap: 4, marginTop: 3 }}>{s.quality[i.id].flags.map((f) => <Badge key={f.id} tone="red">{RULE_BY_ID[f.id].name}</Badge>)}</div>
                   </div>
                   <span className="tiny muted" style={{ whiteSpace: 'nowrap' }}>{fmtTime(i.startedAt)}</span>

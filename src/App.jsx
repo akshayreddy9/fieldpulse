@@ -1,6 +1,6 @@
 import React, { Suspense, lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { ShieldOff } from 'lucide-react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { ShieldOff, AlertTriangle } from 'lucide-react';
 import { useStore } from './store.jsx';
 import Layout, { SurveyorShell, ClientShell } from './components/Layout.jsx';
 import Login from './pages/Login.jsx';
@@ -12,6 +12,7 @@ const AnalystHome = lazy(() => import('./pages/homes/AnalystHome.jsx'));
 const Builder = lazy(() => import('./pages/admin/Builder.jsx'));
 const Surveys = lazy(() => import('./pages/admin/Surveys.jsx'));
 const Targets = lazy(() => import('./pages/admin/Targets.jsx'));
+const Booths = lazy(() => import('./pages/admin/Booths.jsx'));
 const Team = lazy(() => import('./pages/admin/Team.jsx'));
 const Access = lazy(() => import('./pages/admin/Access.jsx'));
 const FieldApp = lazy(() => import('./pages/field/FieldApp.jsx'));
@@ -31,6 +32,26 @@ const Api = lazy(() => import('./pages/addons/Api.jsx'));
 const Compliance = lazy(() => import('./pages/settings/Compliance.jsx'));
 const Delivery = lazy(() => import('./pages/settings/Delivery.jsx'));
 
+// If one screen crashes, show a message on that screen instead of a blank app; moving to another screen recovers.
+class ScreenErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('Screen error:', error, info?.componentStack); }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <Empty icon={AlertTriangle} title="This screen could not be shown">
+        Something on this screen failed: {String(this.state.error.message || this.state.error).slice(0, 160)}. Other screens still work.
+        Please tell the MSR Pulse team which screen this was. <button className="btn sm" onClick={() => window.location.reload()}>Reload</button>
+      </Empty>
+    );
+  }
+}
+function SafeRoutes({ children }) {
+  const loc = useLocation();
+  return <ScreenErrorBoundary key={loc.pathname}>{children}</ScreenErrorBoundary>;
+}
+
 function Guard({ mod, children }) {
   const { can } = useStore();
   if (!can(mod)) return <Empty icon={ShieldOff} title="You don’t have access to this module">Your role does not include this screen. An MSR admin can change this under Access control.</Empty>;
@@ -38,7 +59,7 @@ function Guard({ mod, children }) {
 }
 
 const ROUTES = [
-  ['/admin/builder', 'admin.builder', Builder], ['/admin/surveys', 'admin.access', Surveys], ['/admin/targets', 'admin.targets', Targets],
+  ['/admin/builder', 'admin.builder', Builder], ['/admin/surveys', 'admin.access', Surveys], ['/admin/targets', 'admin.targets', Targets], ['/admin/booths', 'admin.access', Booths],
   ['/admin/team', 'admin.team', Team], ['/admin/access', 'admin.access', Access], ['/field', 'field', FieldApp],
   ['/live', 'live.map', LiveMap], ['/live/alerts', 'live.alerts', Alerts], ['/live/digest', 'live.digest', Digest],
   ['/insights/results', 'insights.results', Results], ['/insights/rollup', 'insights.rollup', Rollup],
@@ -55,16 +76,16 @@ export default function App() {
   const loading = <div className="empty">Loading…</div>;
   // Surveyors get only their phone app
   if (user.role === 'surveyor') {
-    return <SurveyorShell><Suspense fallback={loading}><FieldApp mode="app" /></Suspense></SurveyorShell>;
+    return <SurveyorShell><ScreenErrorBoundary><Suspense fallback={loading}><FieldApp mode="app" /></Suspense></ScreenErrorBoundary></SurveyorShell>;
   }
   // Clients get only their portal
   if (user.role === 'client') {
-    return <ClientShell><Suspense fallback={loading}><ClientPortal /></Suspense></ClientShell>;
+    return <ClientShell><ScreenErrorBoundary><Suspense fallback={loading}><ClientPortal /></Suspense></ScreenErrorBoundary></ClientShell>;
   }
   const Home = user.role === 'supervisor' ? SupervisorHome : user.role === 'analyst' ? AnalystHome : Overview;
   return (
     <Layout>
-      <Suspense fallback={loading}>
+      <SafeRoutes><Suspense fallback={loading}>
         <Routes>
           <Route path="/" element={<Home />} />
           {ROUTES.map(([path, mod, C]) => (
@@ -72,7 +93,7 @@ export default function App() {
           ))}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </Suspense>
+      </Suspense></SafeRoutes>
     </Layout>
   );
 }

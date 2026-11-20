@@ -1,14 +1,17 @@
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, Legend, LabelList } from 'recharts';
 import { PARTY_COLORS } from '../data/questionnaire.js';
+import { R } from '../lib/roles.js';
 
 export const SCALE5 = ['#e11d48', '#fb923c', '#cbd5e1', '#5eead4', '#0d9488'];
 export const CAT = ['#1e3a5f', '#0d9488', '#4f46e5', '#f59e0b', '#e11d48', '#0ea5e9', '#84cc16', '#a855f7', '#64748b', '#f97316'];
 
-export function colorFor(qid, key, k) {
-  if (qid === 'q_vote_intent' || qid === 'q_lean') return PARTY_COLORS[key] || '#94a3b8';
-  if (qid === 'q_leader') return { LA: PARTY_COLORS.A, LB: PARTY_COLORS.B, LC: PARTY_COLORS.C }[key] || '#94a3b8';
-  return CAT[k % CAT.length];
+// Party colours for the main result when its answers use party codes (A, B, C, IND, UND, NS); otherwise a palette
+export function colorFor(qid, key, k = 0) {
+  if (qid && (qid === 'q_vote_intent' || qid === 'q_lean' || qid === R('main')) && PARTY_COLORS[key]) return PARTY_COLORS[key];
+  if (qid === 'q_leader' && ['LA', 'LB', 'LC'].includes(key)) return { LA: PARTY_COLORS.A, LB: PARTY_COLORS.B, LC: PARTY_COLORS.C }[key];
+  if (/^(und|ns|dk|none)$/i.test(String(key))) return '#94a3b8';
+  return CAT[(k || 0) % CAT.length];
 }
 
 const pct = (v) => `${Number(v).toFixed(1)}%`;

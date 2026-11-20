@@ -2,12 +2,13 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { SAMPLE_QUESTIONNAIRE } from './data/questionnaire.js';
 import { generateInterviews, generateSurveyors, simulateInterview } from './data/generate.js';
 import { assessAll, autoStatus } from './lib/quality.js';
-import { BOOTH_BY_ID } from './data/geo.js';
+import { BOOTH_BY_ID, setGeo } from './data/geo.js';
+import { setActiveQuestionnaire } from './lib/roles.js';
 import { api, detectServer, getToken, setToken, API_BASE, getStageKey } from './lib/api.js';
+import { outboxAll, outboxPut, outboxDelete, askPersistentStorage } from './lib/outbox.js';
 
 const KEY = 'msr-pulse-demo-v1';
-// Interviews waiting to sync are always kept on the device, so closing the app offline never loses them.
-const OUTBOX_KEY = 'msr-pulse-outbox';
+// Interviews waiting to sync are kept in the phone's database (lib/outbox.js) until the server confirms them.
 // Last server session, so the field app can start with no signal.
 const CACHE_KEY = 'msr-pulse-offline-cache';
 const SURVEY_SEL_KEY = 'msr-pulse-survey';
@@ -52,6 +53,7 @@ function initial() {
     lang: 'en',
     questionnaire: SAMPLE_QUESTIONNAIRE,
     publishedVersion: SAMPLE_QUESTIONNAIRE.version,
+    geo: null, // booth list; null = built-in sample booths
     surveyors: null,
     targets: {},
     extraInterviews: [],
@@ -87,8 +89,7 @@ function load() {
     st = initial();
   }
   st.lang = 'en'; // screens are English; questions and answers show Telugu + English together
-  const box = readJson(OUTBOX_KEY);
-  if (Array.isArray(box)) st.outbox = box;
+  st.outbox = []; // loaded from the phone's database right after start
   // Direct demo links: ?as=admin | supervisor | analyst | surveyor | client
   try {
     const as = new URLSearchParams(window.location.search).get('as');
@@ -101,7 +102,7 @@ const Ctx = createContext(null);
 
 // Shared settings that are saved on the server (each change is checked against the user's role there).
 const SYNC_KEYS = ['questionnaire', 'draftQuestionnaire', 'publishedVersion', 'targets', 'surveyors', 'permissions', 'statuses', 'notes', 'report', 'reportStatus',
-  'reportHistory', 'privacyLock', 'webhooks', 'peakMonths', 'retentionDays'];
+  'reportHistory', 'privacyLock', 'webhooks', 'peakMonths', 'retentionDays', 'geo'];
 
 export function StoreProvider({ children }) {
   const [state, setState] = useState(load);
@@ -139,7 +140,7 @@ export function StoreProvider({ children }) {
     SYNC_KEYS.forEach((k) => { if (k in st) synced.current[k] = st[k]; });
     setState((s) => ({ ...s, ...st, surveys, surveyId: sid, extraInterviews: [] }));
     setRemote({ r3, r2, r1 });
-    const keep = ['questionnaire', 'publishedVersion', 'targets', 'surveyors', 'permissions', 'privacyLock'];
+    const keep = ['questionnaire', 'publishedVersion', 'targets', 'surveyors', 'permissions', 'privacyLock', 'geo'];
     writeJson(CACHE_KEY, { ...(readJson(CACHE_KEY) || {}), state: { ...Object.fromEntries(keep.filter((k) => k in st).map((k) => [k, st[k]])), surveyId: sid, surveys }, r3: r3.length <= 500 ? r3 : [], at: Date.now() });
   }, []);
 
@@ -213,8 +214,14 @@ export function StoreProvider({ children }) {
     });
   }, [serverMode, state, toast, loadAll]);
 
-  // Always keep the outbox and (in server mode) the signed-in user on the device
-  useEffect(() => { writeJson(OUTBOX_KEY, state.outbox || []); }, [state.outbox]);
+  // Interviews still waiting on this phone (from earlier sessions)
+  useEffect(() => {
+    askPersistentStorage();
+    outboxAll().then((box) => {
+      if (box.length) setState((s) => ({ ...s, outbox: [...box, ...s.outbox.filter((x) => !box.some((b) => b.id === x.id))] }));
+    }).catch(() => toast('Could not open the interviews saved on this phone. Do not uninstall the app; contact your supervisor.', 'error'));
+  }, [toast]);
+  // Keep the signed-in user on the device (server mode) so the app can start offline
   useEffect(() => {
     if (serverMode && state.user && !server?.offline) writeJson(CACHE_KEY, { ...(readJson(CACHE_KEY) || {}), user: state.user });
   }, [serverMode, state.user, server]);
@@ -247,15 +254,19 @@ export function StoreProvider({ children }) {
   }, [state, serverMode, booting]);
 
   // ---------- data ----------
+  // Booth list and question roles of the open survey: shared helpers and screens read these (cheap, no-op when unchanged)
+  setGeo(state.geo || null);
+  setActiveQuestionnaire(state.questionnaire);
   const surveyors = useMemo(() => state.surveyors || generateSurveyors(), [state.surveyors]);
   const seeded = useMemo(() => (serverMode || booting ? [] : generateInterviews(3, generateSurveyors())), [serverMode, booting]);
   const localR2 = useMemo(() => (serverMode || booting ? [] : generateInterviews(2, generateSurveyors())), [serverMode, booting]);
   const round2 = serverMode ? remote.r2 : localR2;
   const localR1 = useMemo(() => (!serverMode && state.round1Imported ? generateInterviews(1, generateSurveyors()) : []), [serverMode, state.round1Imported]);
   const round1 = serverMode ? remote.r1 : localR1;
+  // geo and questionnaire are dependencies on purpose: a new booth list or questionnaire recalculates every screen
   const interviews = useMemo(() => (serverMode
     ? [...remote.r3, ...state.extraInterviews.filter((x) => !remote.r3.some((i) => i.id === x.id))]
-    : [...seeded, ...state.extraInterviews]), [serverMode, remote.r3, seeded, state.extraInterviews]);
+    : [...seeded, ...state.extraInterviews]), [serverMode, remote.r3, seeded, state.extraInterviews, state.geo, state.questionnaire]); // eslint-disable-line react-hooks/exhaustive-deps
   const quality = useMemo(() => assessAll(interviews), [interviews]);
   const statusOf = useCallback((id) => state.statuses[id] || autoStatus(quality[id]), [state.statuses, quality]);
   const valid = useMemo(() => interviews.filter((i) => statusOf(i.id) !== 'Rejected'), [interviews, statusOf]);
@@ -267,32 +278,66 @@ export function StoreProvider({ children }) {
     setState((s) => ({ ...s, audit: [{ t: Date.now(), who: s.user ? s.user.name : 'System', what }, ...s.audit].slice(0, 300) }));
   }, [serverMode]);
 
-  // Send interviews to the server; if that fails (no signal), keep them in the phone's outbox.
-  const pushInterviews = useCallback(async (recs) => {
-    setState((s) => ({ ...s, extraInterviews: [...s.extraInterviews, ...recs] }));
-    if (!serverMode) return true;
+  // Sends interviews to the server. They stay in the phone's outbox until the server confirms them.
+  // Returns 'sent' (on the server), 'saved' (safe on this phone, sends later) or 'unsaved' (only in memory: phone storage failed).
+  const sending = useRef(new Set());
+  const send = useCallback(async (recs) => {
+    const ids = recs.map((r) => r.id);
+    ids.forEach((id) => sending.current.add(id));
     try {
       await api('POST', '/api/interviews', { interviews: recs });
-      return true;
+      await outboxDelete(ids).catch(() => {}); // if this fails it is sent again later: the server ignores repeats
+      setState((s) => ({ ...s, outbox: s.outbox.filter((x) => !ids.includes(x.id)), extraInterviews: [...s.extraInterviews.filter((x) => !ids.includes(x.id)), ...recs] }));
+      return { ok: true };
     } catch (e) {
-      setState((s) => ({ ...s, extraInterviews: s.extraInterviews.filter((x) => !recs.some((r) => r.id === x.id)), outbox: [...s.outbox, ...recs] }));
-      if (e.status === 0) toast('No connection. Interview saved on this phone and will sync later.', 'info');
-      else toast(e.message, 'error');
-      return false;
+      return { ok: false, error: e };
+    } finally {
+      ids.forEach((id) => sending.current.delete(id));
     }
-  }, [serverMode, toast]);
-  const addInterview = useCallback((rec) => pushInterviews([{ ...rec, surveyId: rec.surveyId || surveyRef.current || 'TSP-R3' }]), [pushInterviews]);
+  }, []);
+  const addInterview = useCallback(async (raw, { offline = false } = {}) => {
+    const rec = { ...raw, surveyId: raw.surveyId || surveyRef.current || 'TSP-R3' };
+    if (!serverMode) { setState((s) => ({ ...s, extraInterviews: [...s.extraInterviews, rec] })); return 'sent'; }
+    let stored = true;
+    try { await outboxPut([rec]); } catch {
+      stored = false;
+      toast('This phone could not save the interview (storage full?). Keep the app open and connect to the internet so it can be sent.', 'error');
+    }
+    setState((s) => ({ ...s, outbox: [...s.outbox.filter((x) => x.id !== rec.id), rec] }));
+    if (offline) return stored ? 'saved' : 'unsaved';
+    const r = await send([rec]);
+    if (r.ok) return 'sent';
+    if (r.error.status === 0) toast('No connection. Interview saved on this phone and will be sent later.', 'info');
+    else toast(`${r.error.message}. The interview is kept on this phone.`, 'error');
+    return stored ? 'saved' : 'unsaved';
+  }, [serverMode, send, toast]);
 
   const outboxRef = useRef(state.outbox);
   outboxRef.current = state.outbox;
+  // The same sync problem is shown at most every 10 minutes (sync retries every 30 seconds)
+  const lastSyncError = useRef({ msg: '', t: 0 });
+  const syncError = useCallback((msg) => {
+    if (lastSyncError.current.msg === msg && Date.now() - lastSyncError.current.t < 600000) return;
+    lastSyncError.current = { msg, t: Date.now() };
+    toast(msg, 'error');
+  }, [toast]);
   const syncOutbox = useCallback(async () => {
-    const box = outboxRef.current || [];
+    const box = (outboxRef.current || []).filter((x) => !sending.current.has(x.id));
     if (!box.length) return 0;
-    setState((s) => ({ ...s, outbox: s.outbox.filter((x) => !box.some((b) => b.id === x.id)) }));
-    const ok = await pushInterviews(box.map((r) => ({ ...r, syncedAt: Date.now() })));
-    if (ok) toast(`${box.length} saved interview${box.length > 1 ? 's' : ''} synced`, 'success');
-    return box.length;
-  }, [pushInterviews, toast]);
+    let r = await send(box);
+    let sent = r.ok ? box.length : 0;
+    // The server refused the batch (not a network problem): send one by one so one bad interview does not block the rest
+    if (!r.ok && r.error.status !== 0 && box.length > 1) {
+      const errors = [];
+      for (const rec of box) {
+        r = await send([rec]); // eslint-disable-line no-await-in-loop
+        if (r.ok) sent++; else { errors.push(r.error.message); if (r.error.status === 0) break; }
+      }
+      if (errors.length) syncError(`${errors.length} interview(s) could not be sent: ${errors[0]}. They stay on this phone; tell your supervisor.`);
+    } else if (!r.ok && r.error.status !== 0) syncError(`${r.error.message}. The interview stays on this phone; tell your supervisor.`);
+    if (sent) toast(`${sent} saved interview${sent > 1 ? 's' : ''} sent`, 'success');
+    return sent;
+  }, [send, toast, syncError]);
 
   // Live feed simulation: new interviews arrive every few seconds while switched on
   useEffect(() => {
@@ -301,7 +346,7 @@ export function StoreProvider({ children }) {
       seedRef.current += 1;
       const rec = simulateInterview(seedRef.current * 7919, surveyors);
       addInterview(rec);
-      toast(`New interview synced · ${BOOTH_BY_ID[rec.boothId].short}, ${rec.surveyorId}`, 'live');
+      toast(`New interview synced · ${BOOTH_BY_ID[rec.boothId]?.short}, ${rec.surveyorId}`, 'live');
     }, 4500);
     return () => clearInterval(id);
   }, [state.liveSim, surveyors, addInterview, toast]);
@@ -322,12 +367,12 @@ export function StoreProvider({ children }) {
     setState((s) => ({ ...s, user: null, liveSim: false }));
   }, [serverMode]);
 
-  const revealPii = useCallback(async (interviewId, kind, reason, localValue) => {
+  const revealPii = useCallback(async (interviewId, kind, reason, localValue, question) => {
     if (!serverMode) {
       setState((s) => ({ ...s, accessLog: [{ t: Date.now(), who: s.user?.name || 'Unknown', role: s.user?.role, field: kind === 'phone' ? 'Mobile number' : 'Respondent name', interviewId, reason }, ...s.accessLog].slice(0, 500) }));
       return localValue;
     }
-    const r = await api('POST', '/api/pii/reveal', { interviewId, field: kind, reason });
+    const r = await api('POST', '/api/pii/reveal', { interviewId, field: kind, question, reason });
     setState((s) => ({ ...s, accessLog: [r.entry, ...s.accessLog.filter((x) => x.t !== r.entry.t)].slice(0, 500) }));
     return r.value;
   }, [serverMode]);

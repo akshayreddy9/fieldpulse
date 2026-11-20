@@ -13,12 +13,15 @@ export default function Digest() {
   const [day, setDay] = useState(latestDay(s.interviews));
   const [sendTime, setSendTime] = useState('19:00');
   const todays = s.interviews.filter((i) => istDay(i.startedAt) === day);
-  const flagged = todays.filter((i) => s.quality[i.id].score >= FLAG_THRESHOLD).sort((a, b) => s.quality[b.id].score - s.quality[a.id].score);
+  const score = (i) => s.quality[i.id]?.score || 0;
+  const flagged = todays.filter((i) => score(i) >= FLAG_THRESHOLD).sort((a, b) => score(b) - score(a));
   const byCon = GEO.constituencies.map((c) => ({ c, list: flagged.filter((i) => i.constituencyId === c.id), total: todays.filter((i) => i.constituencyId === c.id).length }));
   const supervisors = s.surveyors.filter((x) => x.role === 'Supervisor');
+  // Message preview: the constituency with the most flagged interviews that day
+  const sample = [...byCon].sort((a, b) => b.list.length - a.list.length || b.total - a.total)[0];
 
   const exportList = () => exportTableExcel('Back-check list', ['Interview', 'Risk score', 'Reasons', 'Surveyor', 'Booth', 'Constituency', 'Time', 'Respondent code', 'Status'],
-    flagged.map((i) => [i.id, s.quality[i.id].score, s.quality[i.id].flags.map((f) => RULE_BY_ID[f.id].name).join(', '), i.surveyorId, BOOTH_BY_ID[i.boothId].short, CONST_BY_ID[i.constituencyId].name.en, fmtClock(i.startedAt), i.id.replace('INT', 'R'), s.statusOf(i.id)]),
+    flagged.map((i) => [i.id, score(i), (s.quality[i.id]?.flags || []).map((f) => RULE_BY_ID[f.id].name).join(', '), i.surveyorId, BOOTH_BY_ID[i.boothId]?.short, CONST_BY_ID[i.constituencyId]?.name.en, fmtClock(i.startedAt), i.id.replace('INT', 'R'), s.statusOf(i.id)]),
     `Back-check-list-${day}.xlsx`);
 
   return (
@@ -26,7 +29,8 @@ export default function Digest() {
       <PageHead eyebrow="Fieldwork" icon={MoonStar} title="Evening summary" desc="Every evening, each supervisor gets the list of that day’s flagged interviews for their area, so back-checks focus only on suspicious interviews instead of random re-visits.">
         <select className="select" style={{ width: 180 }} value={day} onChange={(e) => setDay(e.target.value)}>{days.map((d) => <option key={d} value={d}>{new Date(d).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}</option>)}</select>
         <button className="btn" onClick={exportList}><Download size={15} />Back-check list (Excel)</button>
-        <button className="btn primary" onClick={() => { s.log(`Sent evening digest for ${day} to ${supervisors.length} supervisors`); s.toast(`Digest sent to ${supervisors.length} supervisors by SMS, WhatsApp and email`, 'success'); }}><Send size={15} />Send now</button>
+        {/* Automatic SMS / WhatsApp / email delivery is not connected yet: say so instead of pretending */}
+        <button className="btn primary" onClick={() => s.toast('Automatic sending by SMS, WhatsApp or email is not set up yet. Download the back-check list (Excel) and share it with the supervisors.', 'info')}><Send size={15} />Send now</button>
       </PageHead>
       <div className="grid g4" style={{ marginBottom: 16 }}>
         <Stat label="Interviews this day" value={todays.length} />
@@ -45,8 +49,8 @@ export default function Digest() {
               {list.length > 0 && (
                 <table className="t" style={{ marginBottom: 6 }}>
                   <tbody>{list.map((i) => (
-                    <tr key={i.id}><td style={{ width: 54 }}><Risk q={s.quality[i.id]} /></td><td className="bold small">{i.id}</td><td className="small">{i.surveyorId} · {BOOTH_BY_ID[i.boothId].short}</td><td className="small muted">{fmtClock(i.startedAt)}</td>
-                      <td>{s.quality[i.id].flags.map((f) => <Badge key={f.id} tone="red">{RULE_BY_ID[f.id].name}</Badge>)}</td></tr>
+                    <tr key={i.id}><td style={{ width: 54 }}><Risk q={s.quality[i.id]} /></td><td className="bold small">{i.id}</td><td className="small">{i.surveyorId} · {BOOTH_BY_ID[i.boothId]?.short}</td><td className="small muted">{fmtClock(i.startedAt)}</td>
+                      <td>{(s.quality[i.id]?.flags || []).map((f) =><Badge key={f.id} tone="red">{RULE_BY_ID[f.id].name}</Badge>)}</td></tr>
                   ))}</tbody>
                 </table>
               )}
@@ -65,10 +69,12 @@ export default function Digest() {
           <Card title="Message preview" sub="What a supervisor receives">
             <div style={{ background: '#e7f8ee', borderRadius: 14, padding: 14, fontSize: 13, lineHeight: 1.6, border: '1px solid #c6ecd5' }}>
               <b>MSR Pulse · Evening digest</b><br />
-              {new Date(day).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} · {CONST_BY_ID.KNR.name.en}<br />
-              {byCon.find((x) => x.c.id === 'KNR').total} interviews, <b>{byCon.find((x) => x.c.id === 'KNR').list.length} flagged</b><br />
-              {byCon.find((x) => x.c.id === 'KNR').list.slice(0, 3).map((i) => <span key={i.id}>• {i.id} ({i.surveyorId}): {s.quality[i.id].flags.map((f) => RULE_BY_ID[f.id].name.toLowerCase()).join(', ')}<br /></span>)}
-              Please back-check by 12 noon tomorrow. Tap to open the list in MSR Pulse.
+              {sample ? (<>
+                {day ? new Date(day).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''} · {sample.c.name.en}<br />
+                {sample.total} interviews, <b>{sample.list.length} flagged</b><br />
+                {sample.list.slice(0, 3).map((i) => <span key={i.id}>• {i.id} ({i.surveyorId}): {(s.quality[i.id]?.flags || []).map((f) => RULE_BY_ID[f.id].name.toLowerCase()).join(', ')}<br /></span>)}
+                Please back-check by 12 noon tomorrow. Tap to open the list in MSR Pulse.
+              </>) : 'No booth list yet.'}
             </div>
           </Card>
         </div>

@@ -8,6 +8,7 @@ import { RULE_BY_ID, buildTranscript } from '../lib/quality.js';
 import { allQuestions, optionLabel } from '../data/questionnaire.js';
 import { AUDIO } from '../lib/audio.js';
 import { mulberry32 } from '../data/rng.js';
+import { piiQuestions, piiKind } from '../lib/roles.js';
 
 function answerText(q, v) {
   if (v === undefined || v === '' || v === null) return '—';
@@ -69,6 +70,7 @@ export function AudioPlayer({ interview, transcript }) {
 
 export default function InterviewReview({ interview: i, showTranscript = true }) {
   const s = useStore();
+  const piiIds = piiQuestions(s.questionnaire);
   const q = s.quality[i.id];
   const status = s.statusOf(i.id);
   const booth = BOOTH_BY_ID[i.boothId];
@@ -89,7 +91,7 @@ export default function InterviewReview({ interview: i, showTranscript = true })
         <Risk q={q} />
         <div>
           <div className="bold" style={{ fontSize: 16 }}>{i.id}</div>
-          <div className="tiny muted">{booth.name.en} · {CONST_BY_ID[i.constituencyId].name.en}</div>
+          <div className="tiny muted">{booth.name.en} · {CONST_BY_ID[i.constituencyId]?.name.en}</div>
         </div>
         <div className="spacer" />
         <StatusBadge s={status} />
@@ -135,7 +137,7 @@ export default function InterviewReview({ interview: i, showTranscript = true })
           <tbody>
             {allQuestions(s.questionnaire).map((qq) => (
               <tr key={qq.id}><td className="small muted" style={{ width: '45%' }}>{qq.label.en}</td>
-                <td className="small">{qq.pii ? <PII value={i.answers[qq.id]} kind={qq.id === 'q_phone' ? 'phone' : 'name'} interviewId={i.id} /> : answerText(qq, i.answers[qq.id])}</td></tr>
+                <td className="small">{piiIds.includes(qq.id) ? <PII value={i.answers[qq.id]} kind={piiKind(s.questionnaire, qq.id)} interviewId={i.id} question={qq.id} /> : answerText(qq, i.answers[qq.id])}</td></tr>
             ))}
           </tbody>
         </table>

@@ -3,7 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FileEdit, Target, Users, ShieldCheck, Smartphone, Map, AlertOctagon, MoonStar, BarChart3, Network,
   GitCompareArrows, Sparkles, FileText, Building2, Lock, AudioLines, DatabaseZap, Plug, Scale, CalendarCheck2, Menu, LogOut,
-  Radio, RotateCcw, Sun, LineChart, Wifi, WifiOff, CloudUpload, ClipboardList,
+  Radio, RotateCcw, Sun, LineChart, Wifi, WifiOff, CloudUpload, ClipboardList, MapPinned,
 } from 'lucide-react';
 import { useStore, ROLES } from '../store.jsx';
 import { Toasts, initials } from './ui.jsx';
@@ -20,6 +20,7 @@ export const NAV = [
   { title: 'Set up', items: [
     { to: '/admin/surveys', mod: 'admin.access', label: 'Surveys', icon: ClipboardList, adminOnly: true },
     { to: '/admin/builder', mod: 'admin.builder', label: 'Questionnaire', icon: FileEdit },
+    { to: '/admin/booths', mod: 'admin.access', label: 'Booth list', icon: MapPinned, adminOnly: true },
     { to: '/admin/targets', mod: 'admin.targets', label: 'Booth targets', icon: Target },
     { to: '/admin/team', mod: 'admin.team', label: 'Surveyors & team', icon: Users },
     { to: '/admin/access', mod: 'admin.access', label: 'Who can see what', icon: ShieldCheck },

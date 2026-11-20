@@ -101,9 +101,9 @@ export default function QuestionRenderer({ q, value, onChange, other, onOther, a
 
   if (q.type === 'cascade') {
     const cur = value || {};
-    const cons = GEO.constituencies.filter((c) => !allowedBooths || allowedBooths.some((b) => BOOTH_BY_ID[b].constituencyId === c.id));
-    const mans = cur.constituency ? GEO.mandals.filter((m) => m.constituencyId === cur.constituency && (!allowedBooths || allowedBooths.some((b) => BOOTH_BY_ID[b].mandalId === m.id))) : [];
-    const booths = cur.mandal ? MANDAL_BY_ID[cur.mandal].boothIds.filter((b) => !allowedBooths || allowedBooths.includes(b)) : [];
+    const cons = GEO.constituencies.filter((c) => !allowedBooths || allowedBooths.some((b) => BOOTH_BY_ID[b]?.constituencyId === c.id));
+    const mans = cur.constituency ? GEO.mandals.filter((m) => m.constituencyId === cur.constituency && (!allowedBooths || allowedBooths.some((b) => BOOTH_BY_ID[b]?.mandalId === m.id))) : [];
+    const booths = cur.mandal ? (MANDAL_BY_ID[cur.mandal]?.boothIds || []).filter((b) => !allowedBooths || allowedBooths.includes(b)) : [];
     return (
       <div className="fa-card">
         {header}
@@ -118,7 +118,7 @@ export default function QuestionRenderer({ q, value, onChange, other, onOther, a
             </select></div>
           <div className="field"><label>Polling booth</label>
             <select className="select" value={cur.booth || ''} disabled={!cur.mandal} onChange={(e) => onChange({ ...cur, booth: e.target.value })}>
-              <option value="">Select…</option>{booths.map((b) => <option key={b} value={b}>{BOOTH_BY_ID[b].name.en}</option>)}
+              <option value="">Select…</option>{booths.map((b) => <option key={b} value={b}>{BOOTH_BY_ID[b]?.name.en}</option>)}
             </select></div>
         </div>
       </div>

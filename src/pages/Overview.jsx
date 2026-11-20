@@ -8,8 +8,10 @@ import {
 import { useStore } from '../store.jsx';
 import { Card, PageHead } from '../components/ui.jsx';
 import { frequency, istDay, latestDay, rollup } from '../lib/analytics.js';
-import { PARTY_COLORS } from '../data/questionnaire.js';
+import { findQuestion } from '../data/questionnaire.js';
 import { GEO } from '../data/geo.js';
+import { mainQuestionId } from '../lib/reportGen.js';
+import { colorFor } from '../components/charts.jsx';
 
 const STEPS = [
   { n: '01', t: 'Set up', m: 'Pulse Admin', d: 'Bilingual questionnaire, skip logic, booth targets, surveyor upload', icon: FileEdit, to: '/admin/builder', c: ['#eef0ff', '#4f46e5'] },
@@ -39,14 +41,15 @@ export default function Overview() {
     s.interviews.forEach((i) => { const d = istDay(i.startedAt); m[d] = (m[d] || 0) + 1; });
     return Object.keys(m).sort().map((d) => ({ d: new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }), n: m[d] }));
   }, [s.interviews]);
-  const vote = useMemo(() => frequency(s.questionnaire, 'q_vote_intent', s.valid).rows, [s.questionnaire, s.valid]);
+  const mainId = mainQuestionId(s.questionnaire);
+  const vote = useMemo(() => frequency(s.questionnaire, mainId, s.valid)?.rows || [], [s.questionnaire, mainId, s.valid]);
 
   return (
     <div className="stack" style={{ gap: 20 }}>
       <div className="hero">
         <div className="row" style={{ alignItems: 'flex-start' }}>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div className="tiny" style={{ color: '#5eead4', fontWeight: 700, letterSpacing: '.08em' }}>LIVE SURVEY · ROUND 3 · {s.questionnaire.client.toUpperCase()}</div>
+            <div className="tiny" style={{ color: '#5eead4', fontWeight: 700, letterSpacing: '.08em' }}>LIVE SURVEY{s.questionnaire.client ? ` · ${s.questionnaire.client.toUpperCase()}` : ''}</div>
             <h2 className="mt8">{s.questionnaire.title.en}</h2>
             <p>{GEO.constituencies.length} constituencies · {GEO.mandals.length} mandals · {GEO.booths.length} booths · {s.surveyors.filter((x) => x.role === 'Surveyor').length} surveyors in the field</p>
           </div>
@@ -90,7 +93,7 @@ export default function Overview() {
             </ResponsiveContainer>
           </div>
         </Card>
-        <Card title="Vote intention · state" sub={`Base ${s.valid.length.toLocaleString('en-IN')} accepted interviews`}>
+        <Card title={`${findQuestion(s.questionnaire, mainId)?.label.en || 'Main result'} · state`} sub={`Base ${s.valid.length.toLocaleString('en-IN')} accepted interviews`}>
           <div style={{ height: 240 }}>
             <ResponsiveContainer>
               <BarChart data={vote} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
@@ -98,7 +101,7 @@ export default function Overview() {
                 <YAxis type="category" dataKey="label" width={118} tick={{ fontSize: 12, fill: '#334155' }} axisLine={false} tickLine={false} />
                 <Tooltip formatter={(v) => `${v.toFixed(1)}%`} />
                 <Bar dataKey="pct" radius={[0, 6, 6, 0]} label={{ position: 'right', fontSize: 11, formatter: (v) => `${v.toFixed(1)}%`, fill: '#334155' }}>
-                  {vote.map((r) => <Cell key={r.key} fill={PARTY_COLORS[r.key]} />)}
+                  {vote.map((r, k) => <Cell key={r.key} fill={colorFor(mainId, r.key, k)} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
