@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MSR Pulse</string>
+    <string name="title_activity_main">MSR Pulse</string>
+    <string name="package_name">in.msr.pulse.field</string>
+    <string name="custom_url_scheme">in.msr.pulse.field</string>
+</resources>

@@ -1,0 +1,98 @@
+/* =========================================================
+   Brand theme (same MSR navy + teal for every login)
+   ========================================================= */
+.app, .shell { --role: #0d9488; --role-2: #14b8a6; --role-soft: #e6f7f5; --role-ink: #0f766e; --role-side-1: #0f2342; --role-side-2: #0a182f; }
+[data-role="admin"]      { --role: #0d9488; --role-2: #2dd4bf; --role-soft: #e6f7f5; --role-ink: #0f766e; --role-side-1: #0f2342; --role-side-2: #0a182f; }
+
+.app .sidebar { background: linear-gradient(180deg, var(--role-side-1), var(--role-side-2)); }
+.app .nav a.active { background: linear-gradient(90deg, color-mix(in srgb, var(--role) 32%, transparent), transparent); box-shadow: inset 3px 0 0 var(--role-2); }
+.app .nav-title { color: color-mix(in srgb, var(--role-2) 55%, #8aa0bb); }
+.app .page-head .eyebrow { color: var(--role); }
+.app .tabs button.on { border-bottom-color: var(--role); color: var(--ink); }
+.btn.role { background: var(--role); border-color: var(--role); color: #fff; }
+.btn.role:hover { filter: brightness(.95); background: var(--role); }
+
+.role-card { margin: 2px 12px 8px; padding: 12px; border-radius: 14px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); display: flex; gap: 10px; align-items: center; }
+.role-card .avatar { background: linear-gradient(135deg, var(--role), var(--role-2)); }
+.role-card .who { color: #fff; font-weight: 700; font-size: 13.5px; line-height: 1.2; }
+.role-pill { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--role-2) 22%, transparent); color: var(--role-2); }
+.sidebar-foot .signout { margin-left: auto; color: #b7c4d6; }
+.sidebar-foot .signout:hover { color: #fff; background: rgba(255,255,255,.06); }
+
+.page-icon { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; background: var(--role-soft); color: var(--role); flex-shrink: 0; }
+
+/* Friendly home screens */
+.welcome { border-radius: 20px; padding: 24px; color: #fff; position: relative; overflow: hidden;
+  background: radial-gradient(700px 260px at 0% 0%, color-mix(in srgb, var(--role-2) 40%, transparent), transparent 70%), linear-gradient(135deg, var(--role-side-1), var(--role)); }
+.welcome h2 { font-size: 24px; font-weight: 800; }
+.welcome p { color: rgba(255,255,255,.82); margin: 6px 0 0; max-width: 640px; }
+.welcome .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+.welcome .kpi { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.15); border-radius: 14px; padding: 12px 14px; }
+.welcome .kpi .v { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.welcome .kpi .l { font-size: 12px; color: rgba(255,255,255,.78); }
+@media (max-width: 760px) { .welcome .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.action-tile { display: flex; gap: 12px; align-items: flex-start; padding: 16px; border-radius: 16px; background: #fff; border: 1px solid var(--line); cursor: pointer; transition: all .15s; text-align: left; width: 100%; box-shadow: var(--shadow); }
+.action-tile:hover { border-color: var(--role-2); box-shadow: 0 10px 28px rgba(15,23,42,.09); transform: translateY(-1px); }
+.action-tile .page-icon { width: 40px; height: 40px; }
+.action-tile .t { font-weight: 700; }
+.action-tile .d { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+
+/* =========================================================
+   Surveyor app (phone first) and client portal shells
+   ========================================================= */
+.shell { min-height: 100%; display: flex; flex-direction: column; background: var(--bg); }
+.shell-bar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 10px; padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top));
+  background: linear-gradient(135deg, var(--role-side-1), var(--role)); color: #fff; }
+.shell-bar .brand-mark { width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,.16); }
+.shell-bar .name { font-weight: 800; font-size: 15px; line-height: 1.15; }
+.shell-bar .sub { font-size: 11.5px; opacity: .82; }
+.shell-bar .btn { background: rgba(255,255,255,.15); border: 0; color: #fff; }
+.net-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.16); white-space: nowrap; }
+.net-pill.off { background: #fef3c7; color: #92400e; }
+.shell-body { flex: 1; width: 100%; max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; min-height: 0; }
+.shell.client .shell-body { max-width: 1120px; padding: 20px 16px 48px; display: block; }
+.client-tabs { display: flex; gap: 4px; background: #fff; border-bottom: 1px solid var(--line); padding: 0 16px; overflow-x: auto; position: sticky; top: 56px; z-index: 20; }
+.client-tabs .inner { display: flex; gap: 4px; max-width: 1120px; margin: 0 auto; width: 100%; }
+.client-tabs button { border: 0; background: none; padding: 13px 14px; font-weight: 600; color: var(--muted); border-bottom: 2.5px solid transparent; cursor: pointer; display: inline-flex; gap: 7px; align-items: center; white-space: nowrap; }
+.client-tabs button.on { color: var(--role-ink); border-bottom-color: var(--role); }
+@media (min-width: 600px) { .shell.surveyor .shell-body { box-shadow: 0 0 0 1px var(--line), 0 20px 60px rgba(15,23,42,.08); background: #f3f6f8; } .shell.surveyor { background: linear-gradient(180deg, #e6f7f5, #f3f5fa 320px); } }
+
+/* Field app inside the surveyor shell (and the admin preview) */
+.fapp { flex: 1; display: flex; flex-direction: column; min-height: calc(100dvh - 58px); background: #f3f6f8; }
+.fapp .fa-head { background: linear-gradient(135deg, #0f766e, #0d9488); }
+.fapp .fa-body { padding: 16px; flex: 1; }
+.fapp .fa-foot { position: sticky; bottom: 0; padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+.phone .fapp { min-height: 0; height: 100%; }
+.bottom-nav { position: sticky; bottom: 0; display: grid; grid-template-columns: repeat(2, 1fr); background: #fff; border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
+.bottom-nav button { border: 0; background: none; padding: 9px 4px 10px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11.5px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.bottom-nav button.on { color: #0d9488; }
+.big-start { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 64px; border: 0; border-radius: 18px; font-size: 18px; font-weight: 800; color: #fff; cursor: pointer;
+  background: linear-gradient(135deg, #0f766e, #14b8a6); box-shadow: 0 10px 24px rgba(13,148,136,.32); }
+.big-start:active { transform: scale(.99); }
+.stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat-mini { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+.stat-mini .v { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.stat-mini .l { font-size: 11.5px; color: var(--muted); }
+.greet { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 16px; display: flex; gap: 12px; align-items: center; }
+.greet .avatar { width: 46px; height: 46px; font-size: 16px; background: linear-gradient(135deg, #0f766e, #2dd4bf); }
+
+/* Questions and answers: Telugu and English together */
+.q-te { font-family: 'Noto Sans Telugu', Inter, sans-serif; font-weight: 700; font-size: 16.5px; line-height: 1.55; color: var(--ink); }
+.q-en { font-size: 13px; color: var(--muted); margin-top: 2px; line-height: 1.45; }
+.opt-te { font-family: 'Noto Sans Telugu', Inter, sans-serif; font-size: 15px; font-weight: 600; line-height: 1.4; }
+.opt-en { font-size: 12px; color: var(--muted); line-height: 1.3; }
+.fa-opt .txt { display: flex; flex-direction: column; min-width: 0; }
+.fa-opt { padding: 10px 12px; }
+.grid-q .opt-te { font-size: 12px; font-weight: 600; }
+.grid-q .opt-en { font-size: 10px; }
+.q-num { display: inline-grid; place-items: center; min-width: 28px; height: 22px; padding: 0 7px; border-radius: 7px; background: #e6f7f5; color: #0f766e; font-size: 11.5px; font-weight: 800; }
+.consent-box p { margin: 0; }
+
+/* Login role choice */
+.role-choice { display: flex; gap: 12px; align-items: center; padding: 11px 14px; border: 1.5px solid var(--line); border-radius: 14px; cursor: pointer; transition: all .15s; background: #fff; width: 100%; text-align: left; }
+.role-choice:hover { border-color: var(--rc); }
+.role-choice.on { border-color: var(--rc); background: var(--rc-soft); box-shadow: 0 0 0 3px color-mix(in srgb, var(--rc) 16%, transparent); }
+.role-choice .ic { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--rc-soft); color: var(--rc); flex-shrink: 0; }
+.role-choice.on .ic { background: var(--rc); color: #fff; }
+.survey-select { width: auto; max-width: min(420px, 52vw); height: 36px; font-weight: 700; border-color: transparent; background-color: rgba(15,23,42,.04); }
+.survey-select:hover { border-color: var(--line); }

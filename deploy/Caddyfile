@@ -1,0 +1,9 @@
+# HTTPS in front of MSR Pulse. Caddy gets and renews the certificate automatically (Let's Encrypt).
+{$SITE_ADDRESS} {
+	encode gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy msr-app:8787 {
+		# keep live updates (Server-Sent Events) streaming
+		flush_interval -1
+	}
+}

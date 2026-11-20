@@ -1,0 +1,431 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Metadata:
+  AWSToolsMetrics:
+    AWSAgentToolkit: aws-cloudformation@3
+  com.aws.cloudformation.Context:
+    arch: Single-server hosting for MSR Pulse (Node.js app + SQLite in Docker, Caddy for HTTPS). Small and cheap on purpose; backups go to S3 nightly.
+    must:
+      - Deploy only in the account's India region for real MSR data (data residency, DPDP). Demo accounts may use their project region with sample data only.
+      - Testing mode must always be protected by the site password (SecureString /<stack>/env/STAGING_PASSWORD).
+Description: >-
+  MSR Pulse on MSR's own AWS account. One encrypted server (Docker) with automatic HTTPS,
+  an encrypted S3 bucket for releases and nightly backups, and an MSR-owned encryption key.
+  Create this stack in an India region: Asia Pacific (Mumbai) ap-south-1 or (Hyderabad) ap-south-2.
+
+Parameters:
+  Mode:
+    Type: String
+    AllowedValues: [Testing, Live]
+    Default: Testing
+    Description: >-
+      Testing = sample data + demo accounts, protected by the site password stored as SecureString
+      /<stack name>/env/STAGING_PASSWORD (create it BEFORE the stack). Live = empty system, real SMS login codes.
+      (Switch later with Update stack, then run msr-go-live on the server.)
+  AdminPhone:
+    Type: String
+    AllowedPattern: '^[6-9][0-9]{9}$'
+    Description: 10-digit mobile number of MSR's first admin (used when the system goes Live).
+  AdminName:
+    Type: String
+    Default: MSR Admin
+    Description: Name of MSR's first admin.
+  DomainName:
+    Type: String
+    Default: ''
+    Description: >-
+      Optional, e.g. pulse.msr-example.in (point its DNS A record to the Elastic IP shown in Outputs).
+      Leave empty to use a free automatic address <ip-with-dashes>.sslip.io.
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues: [t3.micro, t3.small, t3.medium, t3.large]
+    Description: t3.micro = cheapest, for a personal demo account. t3.small for testing and early fieldwork; move up for large surveys.
+  DiskSizeGB:
+    Type: Number
+    Default: 30
+    MinValue: 20
+    MaxValue: 500
+
+Conditions:
+  IsLive:
+    Fn::Equals:
+      - Ref: Mode
+      - Live
+  HasDomain:
+    Fn::Not:
+      - Fn::Equals:
+          - Ref: DomainName
+          - ''
+
+Resources:
+  # ---------- MSR-owned encryption key (disk + backups) ----------
+  DataKey:
+    Type: AWS::KMS::Key
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: MSR-owned key that encrypts the server disk and the S3 backups.
+        must:
+          - Keep Retain - deleting this key makes every retained backup and disk unreadable.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: MSR Pulse data encryption key
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AccountAdministers
+            Effect: Allow
+            Principal:
+              AWS:
+                Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:root
+            Action: 'kms:*'
+            Resource: '*'
+  DataKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName:
+        Fn::Sub: alias/msr-pulse-${AWS::StackName}
+      TargetKeyId:
+        Ref: DataKey
+
+  # ---------- Bucket for releases and backups ----------
+  Bucket:
+    Type: AWS::S3::Bucket
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Holds the app release file and nightly database backups.
+        must:
+          - Keep Retain so backups survive deleting the stack.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - BucketKeyEnabled: true
+            ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID:
+                Ref: DataKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: OldBackups
+            Status: Enabled
+            Prefix: backups/
+            ExpirationInDays: 90
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+
+  BucketTlsOnly:
+    Type: AWS::S3::BucketPolicy
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Backups and releases must only travel encrypted.
+    Properties:
+      Bucket:
+        Ref: Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - Fn::GetAtt: [Bucket, Arn]
+              - Fn::Sub: ${Bucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  # ---------- Settings the server reads at start (Systems Manager Parameter Store) ----------
+  ParamSeedSample:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name:
+        Fn::Sub: /${AWS::StackName}/env/SEED_SAMPLE
+      Type: String
+      Value:
+        Fn::If: [IsLive, '0', '1']
+  ParamDemoMode:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name:
+        Fn::Sub: /${AWS::StackName}/env/DEMO_MODE
+      Type: String
+      Value:
+        Fn::If: [IsLive, '0', '1']
+  ParamSms:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name:
+        Fn::Sub: /${AWS::StackName}/env/SMS_PROVIDER
+      Type: String
+      Value:
+        Fn::If: [IsLive, webhook, console]
+  ParamAdminPhone:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name:
+        Fn::Sub: /${AWS::StackName}/env/ADMIN_PHONE
+      Type: String
+      Value:
+        Ref: AdminPhone
+  ParamAdminName:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name:
+        Fn::Sub: /${AWS::StackName}/env/ADMIN_NAME
+      Type: String
+      Value:
+        Ref: AdminName
+  ParamNodeEnv:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name:
+        Fn::Sub: /${AWS::StackName}/env/NODE_ENV
+      Type: String
+      Value: production
+  ParamDomain:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name:
+        Fn::Sub: /${AWS::StackName}/config/DOMAIN
+      Type: String
+      Value:
+        Fn::If:
+          - HasDomain
+          - Ref: DomainName
+          - none
+
+  # ---------- Server permissions: read its settings and releases, write backups. No SSH: use Session Manager. ----------
+  ServerRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Least privilege for the server - read its own settings and release file, write backups, use the data key. Session Manager instead of SSH.
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - Fn::Sub: arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: msr-pulse-server
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:ListBucket, s3:GetBucketLocation]
+                Resource:
+                  - Fn::GetAtt: [Bucket, Arn]
+                  - Fn::Sub: ${Bucket.Arn}/*
+              - Effect: Allow
+                Action: [ssm:GetParametersByPath, ssm:GetParameter, ssm:GetParameters]
+                Resource:
+                  Fn::Sub: arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/*
+              - Effect: Allow
+                Action: [kms:Decrypt, kms:GenerateDataKey, kms:Encrypt]
+                Resource:
+                  Fn::GetAtt: [DataKey, Arn]
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    kms:ViaService:
+                      Fn::Sub: ssm.${AWS::Region}.amazonaws.com
+  ServerProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - Ref: ServerRole
+
+  WebFirewall:
+    Type: AWS::EC2::SecurityGroup
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: MSR Pulse is a public website and phone app backend used from anywhere, so web ports 80/443 must accept all addresses. Port 80 only redirects to HTTPS.
+        must:
+          - Never open any other port (no SSH 22); server administration uses Session Manager.
+    Properties:
+      GroupDescription: MSR Pulse - web traffic only (HTTP redirects to HTTPS)
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  Server:
+    Type: AWS::EC2::Instance
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Runs MSR Pulse and Caddy (automatic HTTPS) in Docker; installs new releases from S3 every 5 minutes and backs up nightly.
+        must:
+          - IMDSv2 only (HttpTokens required); encrypted disk kept on termination (DeleteOnTermination false).
+    Properties:
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+      InstanceType:
+        Ref: InstanceType
+      IamInstanceProfile:
+        Ref: ServerProfile
+      SecurityGroupIds:
+        - Fn::GetAtt: [WebFirewall, GroupId]
+      MetadataOptions:
+        HttpTokens: required
+      # Never charge extra for sustained high CPU (the server slows down slightly instead)
+      CreditSpecification:
+        CPUCredits: standard
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize:
+              Ref: DiskSizeGB
+            VolumeType: gp3
+            Encrypted: true
+            KmsKeyId:
+              Ref: DataKey
+            DeleteOnTermination: false
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: msr-pulse-${AWS::StackName}
+      UserData:
+        Fn::Base64:
+          Fn::Sub:
+            - |
+              #!/bin/bash
+              # MSR Pulse server setup (runs once at first boot)
+              set -x
+              dnf install -y docker cronie unzip
+              systemctl enable --now docker crond
+              # 2 GB swap so the app can be built on a small server
+              if [ ! -f /swapfile ]; then fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile swap swap defaults 0 0' >> /etc/fstab; fi
+              mkdir -p /srv/msr-data/backups /opt/msr-pulse
+              chown -R 1000:1000 /srv/msr-data
+              docker network create msr || true
+
+              cat > /opt/msr-pulse/settings <<'EOT'
+              BUCKET=${BucketName}
+              REGION=${AWS::Region}
+              PREFIX=/${AWS::StackName}
+              KEY=${KeyArn}
+              EOT
+              sed -i 's/^ *//' /opt/msr-pulse/settings
+
+              # ---------- msr-deploy: installs the newest release uploaded to S3 ----------
+              cat > /usr/local/bin/msr-deploy <<'EOT'
+              #!/bin/bash
+              . /opt/msr-pulse/settings
+              ETAG=$(aws s3api head-object --bucket $BUCKET --key release/msr-pulse-release.zip --query ETag --output text --region $REGION 2>/dev/null)
+              if [ -z "$ETAG" ] || [ "$ETAG" = "None" ]; then echo "No release uploaded yet (s3://$BUCKET/release/msr-pulse-release.zip)"; exit 0; fi
+              if [ "$1" != "--force" ] && [ -f /opt/msr-pulse/deployed-etag ] && [ "$(cat /opt/msr-pulse/deployed-etag)" = "$ETAG" ]; then exit 0; fi
+              echo "$(date) deploying release $ETAG"
+              aws s3 cp s3://$BUCKET/release/msr-pulse-release.zip /tmp/msr-release.zip --region $REGION || exit 1
+              rm -rf /opt/msr-pulse/app && mkdir -p /opt/msr-pulse/app && unzip -q /tmp/msr-release.zip -d /opt/msr-pulse/app || exit 1
+              aws ssm get-parameters-by-path --path $PREFIX/env/ --with-decryption --region $REGION --query 'Parameters[*].[Name,Value]' --output text | while read -r NAME VALUE; do echo "$(basename $NAME)=$VALUE"; done > /opt/msr-pulse/app.env
+              if grep -q '^DEMO_MODE=1' /opt/msr-pulse/app.env && ! grep -q '^STAGING_PASSWORD=.' /opt/msr-pulse/app.env; then
+                echo "$(date) REFUSED: Testing mode needs the site password (SecureString $PREFIX/env/STAGING_PASSWORD). Not starting."
+                exit 1
+              fi
+              DOMAIN=$(aws ssm get-parameter --name $PREFIX/config/DOMAIN --region $REGION --query Parameter.Value --output text)
+              if [ "$DOMAIN" = "none" ] || [ -z "$DOMAIN" ]; then
+                TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60')
+                IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
+                DOMAIN="$(echo $IP | tr . -).sslip.io"
+              fi
+              echo "$DOMAIN" > /opt/msr-pulse/site-address
+              docker build -t msr-pulse /opt/msr-pulse/app || exit 1
+              docker rm -f msr-app >/dev/null 2>&1
+              docker run -d --name msr-app --network msr --restart unless-stopped --env-file /opt/msr-pulse/app.env -e DB_FILE=/data/msr-pulse.db -e PORT=8787 -v /srv/msr-data:/data msr-pulse
+              docker rm -f msr-caddy >/dev/null 2>&1
+              docker run -d --name msr-caddy --network msr --restart unless-stopped -p 80:80 -p 443:443 -e SITE_ADDRESS=$DOMAIN -v /opt/msr-pulse/app/deploy/Caddyfile:/etc/caddy/Caddyfile:ro -v caddy_data:/data -v caddy_config:/config caddy:2.8.4
+              echo "$ETAG" > /opt/msr-pulse/deployed-etag
+              docker image prune -f >/dev/null 2>&1
+              echo "$(date) MSR Pulse is running at https://$DOMAIN"
+              EOT
+
+              # ---------- msr-backup: copy of the database to S3 (nightly, and before going live) ----------
+              cat > /usr/local/bin/msr-backup <<'EOT'
+              #!/bin/bash
+              . /opt/msr-pulse/settings
+              docker exec msr-app node server/backup.js /data/backups || exit 1
+              aws s3 sync /srv/msr-data/backups s3://$BUCKET/backups/ --region $REGION --sse aws:kms --sse-kms-key-id $KEY || exit 1
+              find /srv/msr-data/backups -name '*.db' -mtime +7 -delete
+              echo "$(date) backup done"
+              EOT
+
+              # ---------- msr-go-live: end of the test week. Backs up and removes the test data, starts empty. ----------
+              cat > /usr/local/bin/msr-go-live <<'EOT'
+              #!/bin/bash
+              . /opt/msr-pulse/settings
+              MODE=$(aws ssm get-parameter --name $PREFIX/env/SEED_SAMPLE --region $REGION --query Parameter.Value --output text)
+              if [ "$MODE" != "0" ]; then echo "First set Mode = Live: CloudFormation > this stack > Update > Use current template > Mode: Live. Then run this again."; exit 1; fi
+              echo "This removes ALL test data (sample surveys, test interviews, demo logins) and starts MSR Pulse empty."
+              echo "A final backup of the test data is saved to S3 first."
+              read -p "Type GO LIVE to continue: " ANSWER
+              if [ "$ANSWER" != "GO LIVE" ]; then echo "Cancelled."; exit 1; fi
+              /usr/local/bin/msr-backup || { echo "Backup failed - nothing was removed."; exit 1; }
+              STAMP=$(date +%Y%m%d-%H%M%S)
+              aws s3 sync /srv/msr-data/backups s3://$BUCKET/test-week-archive-$STAMP/ --region $REGION --sse aws:kms --sse-kms-key-id $KEY
+              docker rm -f msr-app
+              mkdir -p /srv/msr-archive/$STAMP && mv /srv/msr-data/msr-pulse.db* /srv/msr-archive/$STAMP/
+              /usr/local/bin/msr-deploy --force
+              echo "MSR Pulse is now LIVE and empty. Sign in with the admin mobile number set in the stack."
+              EOT
+              sed -i 's/^              //' /usr/local/bin/msr-deploy /usr/local/bin/msr-backup /usr/local/bin/msr-go-live
+              chmod +x /usr/local/bin/msr-deploy /usr/local/bin/msr-backup /usr/local/bin/msr-go-live
+
+              # New releases are picked up every 5 minutes; backup every night at 03:00 India time
+              printf '%s\n' '*/5 * * * * root /usr/local/bin/msr-deploy >> /var/log/msr-deploy.log 2>&1' '30 21 * * * root /usr/local/bin/msr-backup >> /var/log/msr-backup.log 2>&1' > /etc/cron.d/msr-pulse
+              /usr/local/bin/msr-deploy >> /var/log/msr-deploy.log 2>&1
+            - BucketName:
+                Ref: Bucket
+              KeyArn:
+                Fn::GetAtt: [DataKey, Arn]
+
+  ServerAddress:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId:
+        Ref: Server
+
+Outputs:
+  WebsiteAddress:
+    Description: Open this after uploading the release (replace dots in the IP with dashes if no domain was given)
+    Value:
+      Fn::If:
+        - HasDomain
+        - Fn::Sub: https://${DomainName}
+        - Fn::Sub: https://<${ServerAddress}-with-dots-replaced-by-dashes>.sslip.io
+  ElasticIP:
+    Description: Fixed IP address of the server (point your domain's A record here)
+    Value:
+      Ref: ServerAddress
+  ReleaseUploadLocation:
+    Description: Upload msr-pulse-release.zip here (S3 console > this bucket > folder "release")
+    Value:
+      Fn::Sub: s3://${Bucket}/release/msr-pulse-release.zip
+  BackupLocation:
+    Value:
+      Fn::Sub: s3://${Bucket}/backups/
+  ServerConsole:
+    Description: Open the server's command line in the browser (Systems Manager > Session Manager), e.g. to run "sudo msr-go-live"
+    Value:
+      Fn::Sub: https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${Server}?region=${AWS::Region}

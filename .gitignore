@@ -1,0 +1,21 @@
+node_modules
+dist
+data/
+.env
+
+# Android build output
+android/app/build/
+android/.gradle/
+MSR-Pulse.apk
+test-site-password.txt
+msr-pulse-release.zip
+android/build/
+android/local.properties
+android/capacitor-cordova-android-plugins/build/
+
+# Separate project with its own repository
+Gpay/
+
+# Local logs and editor files
+*.log
+.DS_Store

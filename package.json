@@ -1,0 +1,44 @@
+{
+  "name": "msr-pulse",
+  "private": true,
+  "version": "1.0.0",
+  "description": "MSR Pulse - end-to-end survey platform for Micro Studies and Research Organisation",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host --open",
+    "server": "node server/index.js",
+    "start": "vite build && node server/index.js",
+    "build": "vite build",
+    "preview": "vite preview --host --open",
+    "test": "node --test server/test/api.test.js server/test/surveys.test.js",
+    "backup": "node server/backup.js",
+    "app:build": "vite build && npx cap sync",
+    "app:ios": "npx cap open ios",
+    "app:android": "npx cap open android"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.10.0",
+    "@capacitor/android": "^7.6.10",
+    "@capacitor/core": "^7.6.10",
+    "express": "^4.21.2",
+    "jspdf": "2.5.2",
+    "jspdf-autotable": "3.8.4",
+    "leaflet": "1.9.4",
+    "lucide-react": "0.460.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-leaflet": "4.2.1",
+    "react-router-dom": "6.28.0",
+    "recharts": "2.13.3",
+    "xlsx": "0.18.5",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.6.10",
+    "@vitejs/plugin-react": "4.3.4",
+    "vite": "5.4.11"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}
