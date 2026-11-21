@@ -1,8 +1,8 @@
 {
-  "name": "msr-pulse",
+  "name": "fieldpulse",
   "private": true,
   "version": "1.0.0",
-  "description": "MSR Pulse - end-to-end survey platform for Micro Studies and Research Organisation",
+  "description": "FieldPulse - offline-first field survey platform: questionnaire builder, phone app, live quality checks, results and client reports",
   "type": "module",
   "scripts": {
     "dev": "vite --host --open",
