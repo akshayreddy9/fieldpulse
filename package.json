@@ -10,7 +10,7 @@
     "start": "vite build && node server/index.js",
     "build": "vite build",
     "preview": "vite preview --host --open",
-    "test": "node --test server/test/api.test.js server/test/surveys.test.js server/test/booths-roles.test.js server/test/teams.test.js",
+    "test": "node --test server/test/api.test.js server/test/surveys.test.js server/test/booths-roles.test.js server/test/teams.test.js server/test/media.test.js",
     "backup": "node server/backup.js",
     "app:build": "vite build && npx cap sync",
     "app:ios": "npx cap open ios",

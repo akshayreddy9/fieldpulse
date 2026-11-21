@@ -30,6 +30,7 @@ export const STATE_RULES = {
   webhooks: { perm: 'addons.api' },
   peakMonths: { perm: 'settings.delivery' },
   retentionDays: { perm: 'settings.compliance' },
+  mediaRetentionDays: { perm: 'settings.compliance' },
   geo: { perm: 'admin.access' }, // booth list: shared by all surveys, admins only
   team: { perm: 'admin.team' }, // who works on a survey (null = everyone), per survey
 };

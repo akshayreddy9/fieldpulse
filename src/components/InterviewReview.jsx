@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Circle, Polyline, Tooltip } from 'react-leaflet';
-import { CheckCircle2, PhoneCall, XCircle, Play, Pause, AudioLines, MapPin, Clock, User, Smartphone, Sparkles, ShieldAlert } from 'lucide-react';
+import { CheckCircle2, PhoneCall, XCircle, Play, Pause, AudioLines, MapPin, Clock, User, Smartphone, ShieldAlert, Camera } from 'lucide-react';
 import { useStore } from '../store.jsx';
 import { Badge, PII, Risk, StatusBadge, fmtTime } from './ui.jsx';
 import { BOOTH_BY_ID, MANDAL_BY_ID, CONST_BY_ID } from '../data/geo.js';
@@ -9,6 +9,7 @@ import { allQuestions, optionLabel } from '../data/questionnaire.js';
 import { AUDIO } from '../lib/audio.js';
 import { mulberry32 } from '../data/rng.js';
 import { piiQuestions, piiKind } from '../lib/roles.js';
+import { apiFileUrl } from '../lib/api.js';
 
 function answerText(q, v) {
   if (v === undefined || v === '' || v === null) return '—';
@@ -49,7 +50,7 @@ export function AudioPlayer({ interview, transcript }) {
         <span className="mono small">{String(Math.floor(tsec / 60)).padStart(2, '0')}:{String(tsec % 60).padStart(2, '0')} / {Math.floor(total / 60)}:{String(total % 60).padStart(2, '0')}</span>
       </div>
       {real && <audio ref={audioRef} src={real} onTimeUpdate={(e) => setPos(e.target.currentTime / (e.target.duration || 1))} onEnded={() => setPlaying(false)} style={{ display: 'none' }} />}
-      <div className="tiny muted mt8">{real ? 'Real recording captured on this device during the demo.' : 'Preview: recordings stay on the surveyor’s phone for now (upload to MSR’s secure storage is planned). The waveform and transcript here are simulated; green = consent segment.'}</div>
+      <div className="tiny muted mt8">{real ? 'Real recording captured on this device during the demo.' : 'Sample interview (made-up data): there is no real recording, so this waveform and transcript are simulated. Interviews done in the app show the real recording and photo here.'}</div>
       {transcript && (
         <div className="mt12" style={{ maxHeight: 260, overflowY: 'auto' }}>
           {transcript.map((l, k) => (
@@ -62,6 +63,58 @@ export function AudioPlayer({ interview, transcript }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Real recording and photo of an interview (uploaded from the phone). Opening one is logged in the privacy access log.
+function InterviewMedia({ i, status, transcript }) {
+  const s = useStore();
+  const [urls, setUrls] = useState({});
+  const [err, setErr] = useState({});
+  const [busy, setBusy] = useState('');
+  // Local copies are released when moving to another interview (or leaving the screen)
+  const urlsRef = useRef({});
+  urlsRef.current = urls;
+  useEffect(() => { setUrls({}); setErr({}); return () => Object.values(urlsRef.current).forEach((u) => URL.revokeObjectURL(u)); }, [i.id]);
+  const days = Number(s.mediaRetentionDays || 90);
+  const keepUntil = new Date(i.startedAt + days * 86400000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const underReview = status === 'Flagged' || status === 'Back-check';
+  const open = async (kind) => {
+    setBusy(kind); setErr((e) => ({ ...e, [kind]: '' }));
+    try { const u = await apiFileUrl(`/api/interviews/${encodeURIComponent(i.id)}/media/${kind}`); setUrls((x) => ({ ...x, [kind]: u })); } catch (e) { setErr((x) => ({ ...x, [kind]: e.message })); }
+    setBusy('');
+  };
+  const audio = i.media?.audio;
+  const photo = i.media?.photo;
+  const fromPhone = !!i.fromFieldApp;
+  const kept = <span className="tiny muted">Kept until {keepUntil}{underReview ? ' (longer while this interview is under review)' : ''} · opening it is recorded in the privacy log</span>;
+  const deleted = (m) => <div className="small muted">Deleted on {m.deleted} (storage period of {days} days ended).</div>;
+  return (
+    <div className="stack" style={{ gap: 12 }}>
+      <div>
+        <div className="row tiny bold muted" style={{ marginBottom: 6 }}><AudioLines size={13} />RECORDING</div>
+        {audio && !audio.deleted && (urls.audio
+          ? <audio controls autoPlay src={urls.audio} style={{ width: '100%' }} />
+          : <div className="row"><button className="btn teal sm" disabled={busy === 'audio'} onClick={() => open('audio')}><Play size={14} />{busy === 'audio' ? 'Loading…' : 'Play recording'}</button><span className="tiny muted">{(audio.size / 1048576).toFixed(1)} MB</span></div>)}
+        {audio && !audio.deleted && <div className="mt8">{kept}</div>}
+        {audio?.deleted && deleted(audio)}
+        {!audio && fromPhone && <div className="small muted">{i.consent?.audio ? 'Recorded on the phone; not uploaded yet (it uploads when the surveyor’s phone has internet).' : 'No recording was made for this interview.'}</div>}
+        {!audio && !fromPhone && <AudioPlayer interview={i} transcript={transcript} />}
+        {err.audio && <div className="small mt8" style={{ color: 'var(--red)' }}>{err.audio}</div>}
+      </div>
+      {(photo || i.answers && Object.values(i.answers).includes(true) && fromPhone) && (
+        <div>
+          <div className="row tiny bold muted" style={{ marginBottom: 6 }}><Camera size={13} />PHOTO</div>
+          {photo && !photo.deleted && (urls.photo
+            ? <a href={urls.photo} target="_blank" rel="noreferrer"><img src={urls.photo} alt="Interview photo" style={{ maxWidth: '100%', maxHeight: 320, borderRadius: 10, border: '1px solid var(--line)' }} /></a>
+            : <button className="btn sm" disabled={busy === 'photo'} onClick={() => open('photo')}><Camera size={14} />{busy === 'photo' ? 'Loading…' : 'Show photo'}</button>)}
+          {photo && !photo.deleted && <div className="mt8">{kept}</div>}
+          {photo?.deleted && deleted(photo)}
+          {!photo && <div className="small muted">Photo taken; not uploaded yet.</div>}
+          {err.photo && <div className="small mt8" style={{ color: 'var(--red)' }}>{err.photo}</div>}
         </div>
       )}
     </div>
@@ -126,10 +179,7 @@ export default function InterviewReview({ interview: i, showTranscript = true })
         </MapContainer>
       </div>
 
-      <div>
-        <div className="row tiny bold muted" style={{ marginBottom: 6 }}><AudioLines size={13} />RECORDING {showTranscript && <><Sparkles size={12} style={{ color: 'var(--indigo)' }} />AI TRANSCRIPT (TELUGU + ENGLISH)</>}</div>
-        <AudioPlayer interview={i} transcript={showTranscript ? transcript : null} />
-      </div>
+      <InterviewMedia i={i} status={status} transcript={showTranscript ? transcript : null} />
 
       <details>
         <summary className="small bold" style={{ cursor: 'pointer' }}>All answers ({allQuestions(s.questionnaire).length} questions)</summary>

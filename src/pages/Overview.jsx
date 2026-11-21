@@ -161,7 +161,7 @@ export default function Overview() {
             // [icon, title, what it is, built today, comes at go-live]
             [Smartphone, 'Pulse Field app', 'Android app and iPhone web app from one codebase. Works fully offline; each interview stays in the phone’s database until the server confirms it.', ['Offline', 'Consent + GPS'], ['On-device encryption', 'iPhone App Store app']],
             [Cloud, 'Server', 'Containers on one AWS server with automatic HTTPS. Mobile number + SMS code login, role-based access checked on the server.', ['HTTPS', 'Role-based access'], ['MSR’s own AWS account, Mumbai', 'Real SMS gateway']],
-            [Database, 'Data & backups', 'Encrypted database on an encrypted disk with an MSR-owned key; nightly encrypted backups. Personal details deleted on schedule.', ['KMS encryption', 'Nightly backups'], ['Recordings & photos to S3']],
+            [Database, 'Data & backups', 'Encrypted database on an encrypted disk with an MSR-owned key; nightly encrypted backups. Personal details deleted on schedule.', ['KMS encryption', 'Nightly backups', 'Recordings & photos'], ['Recordings in S3, Mumbai']],
             [Cpu, 'Quality + AI', 'Nine quality checks score every interview as it syncs. AI drafts the report from totals only, never personal details.', ['Same-day flags', 'AI report draft'], ['Telugu transcription', 'Digest by SMS / email']],
           ].map(([I, t, d, built, later]) => (
             <div key={t} className="card" style={{ padding: 16, boxShadow: 'none' }}>

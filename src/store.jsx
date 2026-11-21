@@ -4,8 +4,8 @@ import { generateInterviews, generateSurveyors, simulateInterview } from './data
 import { assessAll, autoStatus } from './lib/quality.js';
 import { BOOTH_BY_ID, setGeo } from './data/geo.js';
 import { setActiveQuestionnaire } from './lib/roles.js';
-import { api, detectServer, getToken, setToken, API_BASE, getStageKey } from './lib/api.js';
-import { outboxAll, outboxPut, outboxDelete, askPersistentStorage } from './lib/outbox.js';
+import { api, apiUpload, detectServer, getToken, setToken, API_BASE, getStageKey } from './lib/api.js';
+import { outboxAll, outboxPut, outboxDelete, askPersistentStorage, mediaPut, mediaAll, mediaDelete } from './lib/outbox.js';
 
 const KEY = 'msr-pulse-demo-v1';
 // Interviews waiting to sync are kept in the phone's database (lib/outbox.js) until the server confirms them.
@@ -77,6 +77,8 @@ function initial() {
     outbox: [],
     deviceOnline: true,
     retentionDays: 180,
+    mediaRetentionDays: 90,
+    mediaWaiting: 0, // recordings / photos on this phone not yet uploaded
   };
 }
 
@@ -102,7 +104,7 @@ const Ctx = createContext(null);
 
 // Shared settings that are saved on the server (each change is checked against the user's role there).
 const SYNC_KEYS = ['questionnaire', 'draftQuestionnaire', 'publishedVersion', 'targets', 'surveyors', 'permissions', 'statuses', 'notes', 'report', 'reportStatus',
-  'reportHistory', 'privacyLock', 'webhooks', 'peakMonths', 'retentionDays', 'geo', 'team'];
+  'reportHistory', 'privacyLock', 'webhooks', 'peakMonths', 'retentionDays', 'geo', 'team', 'mediaRetentionDays'];
 
 export function StoreProvider({ children }) {
   const [state, setState] = useState(load);
@@ -263,6 +265,7 @@ export function StoreProvider({ children }) {
     outboxAll().then((box) => {
       if (box.length) setState((s) => ({ ...s, outbox: [...box, ...s.outbox.filter((x) => !box.some((b) => b.id === x.id))] }));
     }).catch(() => toast('Could not open the interviews saved on this phone. Do not uninstall the app; contact your supervisor.', 'error'));
+    mediaAll().then((m) => setState((s) => ({ ...s, mediaWaiting: m.length }))).catch(() => {});
   }, [toast]);
   // Keep the signed-in user on the device (server mode) so the app can start offline
   useEffect(() => {
@@ -364,9 +367,41 @@ export function StoreProvider({ children }) {
     lastSyncError.current = { msg, t: Date.now() };
     toast(msg, 'error');
   }, [toast]);
+  // ---------- Recordings and photos: uploaded after their interview has reached the server ----------
+  const uploading = useRef(false);
+  const uploadMedia = useCallback(async () => {
+    if (!serverMode || uploading.current) return 0;
+    uploading.current = true;
+    let done = 0;
+    try {
+      const all = await mediaAll();
+      for (const m of all) {
+        if ((outboxRef.current || []).some((x) => x.id === m.id)) continue; // the interview itself is not sent yet
+        try {
+          await apiUpload(`/api/interviews/${encodeURIComponent(m.id)}/media/${m.kind}`, m.blob, m.type); // eslint-disable-line no-await-in-loop
+          await mediaDelete(m.key); // eslint-disable-line no-await-in-loop
+          done++;
+        } catch (e) {
+          if (e.status === 0) break; // no signal: try again later
+          if (e.status === 413 || e.status === 400) { await mediaDelete(m.key); syncError(`A ${m.kind === 'audio' ? 'recording' : 'photo'} could not be uploaded (${e.message}) and was removed from this phone.`); } // eslint-disable-line no-await-in-loop
+          // 404 = interview not on the server yet; 403 etc.: keep and retry later
+        }
+      }
+      const left = await mediaAll();
+      setState((s) => ({ ...s, mediaWaiting: left.length }));
+    } finally { uploading.current = false; }
+    return done;
+  }, [serverMode, syncError]);
+  // Saves a recording / photo on the phone first, then uploads it when possible
+  const addMedia = useCallback(async (id, kind, blob, type) => {
+    if (!serverMode || !blob || !blob.size) return;
+    try { await mediaPut(id, kind, blob, type); } catch { toast(`This phone could not keep the ${kind === 'audio' ? 'recording' : 'photo'} (storage full?).`, 'error'); return; }
+    setState((s) => ({ ...s, mediaWaiting: s.mediaWaiting + 1 }));
+  }, [serverMode, toast]);
+
   const syncOutbox = useCallback(async () => {
     const box = (outboxRef.current || []).filter((x) => !sending.current.has(x.id));
-    if (!box.length) return 0;
+    if (!box.length) { await uploadMedia(); return 0; }
     let r = await send(box);
     let sent = r.ok ? box.length : 0;
     // The server refused the batch (not a network problem): send one by one so one bad interview does not block the rest
@@ -379,8 +414,9 @@ export function StoreProvider({ children }) {
       if (errors.length) syncError(`${errors.length} interview(s) could not be sent: ${errors[0]}. They stay on this phone; tell your supervisor.`);
     } else if (!r.ok && r.error.status !== 0) syncError(`${r.error.message}. The interview stays on this phone; tell your supervisor.`);
     if (sent) toast(`${sent} saved interview${sent > 1 ? 's' : ''} sent`, 'success');
+    await uploadMedia();
     return sent;
-  }, [send, toast, syncError]);
+  }, [send, toast, syncError, uploadMedia]);
 
   // Live feed simulation: new interviews arrive every few seconds while switched on
   useEffect(() => {
@@ -487,7 +523,7 @@ export function StoreProvider({ children }) {
 
   const value = {
     ...state, update, toast, toasts, log, can, server, serverMode, booting,
-    surveyors, interviews, valid, quality, statusOf, round2, round1, addInterview, syncOutbox,
+    surveyors, interviews, valid, quality, statusOf, round2, round1, addInterview, syncOutbox, addMedia, uploadMedia,
     requestCode, verifyCode, logout, revealPii, setRound1, selectSurvey, createSurvey, updateSurvey, createApiKey, revokeApiKey, aiReportDraft, aiAsk, reset, reload: loadAll,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

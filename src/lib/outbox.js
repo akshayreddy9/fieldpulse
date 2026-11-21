@@ -7,6 +7,7 @@
 
 const DB_NAME = 'msr-pulse';
 const STORE = 'outbox';
+const MEDIA = 'media'; // recordings and photos waiting to upload: { key: '<interview id>:<audio|photo>', id, kind, blob, type }
 const LEGACY_KEY = 'msr-pulse-outbox'; // older app versions kept the outbox here
 
 let dbPromise = null;
@@ -15,8 +16,11 @@ function openDb() {
   if (!dbPromise) {
     dbPromise = new Promise((resolve) => {
       let req;
-      try { req = indexedDB.open(DB_NAME, 1); } catch { resolve(null); return; }
-      req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE, { keyPath: 'id' }); };
+      try { req = indexedDB.open(DB_NAME, 2); } catch { resolve(null); return; }
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE, { keyPath: 'id' });
+        if (!req.result.objectStoreNames.contains(MEDIA)) req.result.createObjectStore(MEDIA, { keyPath: 'key' });
+      };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => resolve(null);
       req.onblocked = () => resolve(null);
@@ -25,9 +29,9 @@ function openDb() {
   return dbPromise;
 }
 
-const tx = (db, mode, fn) => new Promise((resolve, reject) => {
-  const t = db.transaction(STORE, mode);
-  const out = fn(t.objectStore(STORE));
+const tx = (db, mode, fn, store = STORE) => new Promise((resolve, reject) => {
+  const t = db.transaction(store, mode);
+  const out = fn(t.objectStore(store));
   t.oncomplete = () => resolve(out?.result ?? out);
   t.onerror = () => reject(t.error || new Error('Phone storage error'));
   t.onabort = () => reject(t.error || new Error('Phone storage is full'));
@@ -80,4 +84,24 @@ export function newInterviewId(surveyorId) {
     ? Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(16).padStart(2, '0')).join('')
     : Math.random().toString(16).slice(2, 10);
   return `INT-${String(surveyorId || 'X').replace(/[^A-Za-z0-9]/g, '').slice(0, 10)}-${Date.now().toString(36)}-${rand}`.toUpperCase();
+}
+
+// ---------- Recordings and photos waiting to upload (kept on the phone until the server has them) ----------
+// Without IndexedDB they are kept in memory only (lost if the app is closed before they upload).
+const memMedia = new Map();
+export async function mediaPut(id, kind, blob, type) {
+  const rec = { key: `${id}:${kind}`, id, kind, blob, type: type || blob.type, at: Date.now() };
+  const db = await openDb();
+  if (!db) { memMedia.set(rec.key, rec); return; }
+  await tx(db, 'readwrite', (st) => st.put(rec), MEDIA);
+}
+export async function mediaAll() {
+  const db = await openDb();
+  if (!db) return [...memMedia.values()];
+  return (await tx(db, 'readonly', (st) => st.getAll(), MEDIA)) || [];
+}
+export async function mediaDelete(key) {
+  memMedia.delete(key);
+  const db = await openDb();
+  if (db) await tx(db, 'readwrite', (st) => st.delete(key), MEDIA);
 }

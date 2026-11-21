@@ -76,6 +76,7 @@ const DEFAULT_STATE = () => ({
   peakMonths: ['2026-11', '2026-12', '2027-03'],
   permissions: DEFAULT_PERMISSIONS_SERVER,
   retentionDays: 180,
+  mediaRetentionDays: 90, // recordings and photos (admin can change on Security & DPDP)
 });
 
 function insertInterviews(db, list) {

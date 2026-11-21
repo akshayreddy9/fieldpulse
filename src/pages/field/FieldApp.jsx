@@ -54,7 +54,7 @@ function FieldAppInner({ mode = 'preview' }) {
     if (!navigator.onLine) off();
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const hasWaiting = s.outbox.length > 0;
+  const hasWaiting = s.outbox.length > 0 || s.mediaWaiting > 0; // interviews or recordings/photos still on the phone
   useEffect(() => {
     if (!s.deviceOnline || !hasWaiting) return undefined;
     const first = setTimeout(() => { s.syncOutbox(); }, 800);
@@ -104,7 +104,9 @@ function FieldAppInner({ mode = 'preview' }) {
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') { setRecMode('unavailable'); return; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
+      // Speech quality (~24 kbit/s): a 15-minute interview is about 3 MB instead of ~14 MB, saving phone storage and mobile data
+      const mime = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/webm', 'audio/mp4'].find((m) => MediaRecorder.isTypeSupported?.(m));
+      const mr = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 24000 });
       chunks.current = [];
       mr.ondataavailable = (e) => chunks.current.push(e.data);
       mr.start();
@@ -119,7 +121,7 @@ function FieldAppInner({ mode = 'preview' }) {
   const stopRecording = () => new Promise((resolve) => {
     const mr = recRef.current;
     if (!mr) return resolve(null);
-    mr.onstop = () => { mr.stream.getTracks().forEach((x) => x.stop()); resolve(URL.createObjectURL(new Blob(chunks.current, { type: mr.mimeType }))); };
+    mr.onstop = () => { mr.stream.getTracks().forEach((x) => x.stop()); resolve(new Blob(chunks.current, { type: mr.mimeType || 'audio/webm' })); };
     mr.stop();
     recRef.current = null;
     return undefined;
@@ -157,7 +159,7 @@ function FieldAppInner({ mode = 'preview' }) {
     setErr(''); setErrQ(null);
     const np = nextPage(page);
     if (np >= 0) { setPage(np); window.scrollTo?.(0, 0); return; }
-    const audioUrl = await stopRecording();
+    const audioBlob = await stopRecording();
     // Demo switches only apply in demo mode. Real fieldwork always records the true time, location and consent.
     const realSecs = Math.max(1, Math.floor((Date.now() - startedAt) / 1000));
     const dur = demo && realDuration && !app ? 840 + Math.floor(Math.random() * 300) : (demo && app ? Math.max(realSecs, 840 + Math.floor(Math.random() * 300)) : realSecs);
@@ -184,10 +186,15 @@ function FieldAppInner({ mode = 'preview' }) {
       },
       source: 'Pulse Field app', syncedAt: Date.now(), fromFieldApp: true,
     };
-    if (audioUrl) AUDIO.set(id, audioUrl);
+    if (audioBlob?.size) AUDIO.set(id, URL.createObjectURL(audioBlob));
+    // Recording and photo are saved on the phone FIRST (so nothing is lost if the app closes), then uploaded after the interview
+    if (audioBlob?.size) await s.addMedia(id, 'audio', audioBlob, audioBlob.type);
+    const photoQ = allQs.find((x) => x.type === 'photo' && shown.has(x.id) && typeof ans[x.id] === 'string' && ans[x.id].startsWith('data:'));
+    if (photoQ) { const photoBlob = await (await fetch(ans[photoQ.id])).blob(); await s.addMedia(id, 'photo', photoBlob, photoBlob.type || 'image/jpeg'); }
     setLastId(id);
     // Saved on the phone first, then sent; it stays on the phone until the server confirms it
     const result = await s.addInterview(rec, { offline: !s.deviceOnline });
+    if (result === 'sent') s.uploadMedia();
     if (result === 'sent') s.toast('Interview sent to MSR Pulse', 'success');
     setSaveResult(result);
     setQnSnap(null);
@@ -308,6 +315,13 @@ function FieldAppInner({ mode = 'preview' }) {
                     <CloudUpload size={18} color="#b45309" />
                     <div style={{ flex: 1 }}><div className="bold small">{s.outbox.length} interview{s.outbox.length > 1 ? 's' : ''} waiting to send</div><div className="tiny muted">{s.deviceOnline ? 'Sending now…' : 'Will send automatically when internet returns'}</div></div>
                     {s.deviceOnline && <button className="btn sm" onClick={() => s.syncOutbox()}><RefreshCw size={13} />Send</button>}
+                  </div>
+                )}
+                {s.mediaWaiting > 0 && (
+                  <div className="fa-card row" style={{ borderColor: '#bfdbfe', background: '#eff6ff', marginBottom: 0 }}>
+                    <Mic size={18} color="#2563eb" />
+                    <div style={{ flex: 1 }}><div className="bold small">{s.mediaWaiting} recording{s.mediaWaiting > 1 ? 's' : ''} / photo{s.mediaWaiting > 1 ? 's' : ''} waiting to upload</div><div className="tiny muted">{s.deviceOnline ? 'Uploading in the background…' : 'Will upload when internet returns'}. Do not uninstall the app until this is 0.</div></div>
+                    {s.deviceOnline && <button className="btn sm" onClick={() => s.syncOutbox()}><RefreshCw size={13} />Upload</button>}
                   </div>
                 )}
               </div>

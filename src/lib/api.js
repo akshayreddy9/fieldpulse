@@ -70,3 +70,23 @@ export async function detectServer(timeoutMs = 8000) {
     return null;
   }
 }
+
+// Uploads a recording or photo (raw file body). Throws ApiError like api().
+export async function apiUpload(path, blob, type) {
+  const token = getToken();
+  let res;
+  try {
+    res = await fetch(API_BASE + path, { method: 'POST', cache: 'no-store', headers: { 'Content-Type': type || blob.type || 'application/octet-stream', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...stageHeader() }, body: blob });
+  } catch { throw new ApiError(0, 'No connection to the MSR Pulse server'); }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status, data?.error || `Server error ${res.status}`);
+  return data;
+}
+// Downloads a protected file (recording / photo) and returns a local URL the page can play or show
+export async function apiFileUrl(path) {
+  const token = getToken();
+  let res;
+  try { res = await fetch(API_BASE + path, { cache: 'no-store', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...stageHeader() } }); } catch { throw new ApiError(0, 'No connection to the MSR Pulse server'); }
+  if (!res.ok) { const d = await res.json().catch(() => null); throw new ApiError(res.status, d?.error || `Server error ${res.status}`); }
+  return URL.createObjectURL(await res.blob());
+}

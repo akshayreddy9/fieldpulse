@@ -198,6 +198,18 @@ team add/edit with login handling.
   (old 6-digit ids could collide and the server silently dropped the second interview).
 - One crashing screen no longer blanks the whole app (error boundary). Evening digest crash with a non-sample booth list fixed.
 
+**Round 2026-11-21 d (recordings & photos) - BUILT and tested, NOT yet deployed (waiting for the owner's OK), app version 2026-11-21T06:01:**
+- Phone saves the recording (speech quality ~24 kbit/s, ~3 MB per 15 min) and photo in IndexedDB store `media` first, uploads them
+  after the interview (POST /api/interviews/:id/media/audio|photo), removes them only when the server has them, retries offline.
+- Server stores files via server/media.js on the data disk (<db folder>/media; on AWS /srv/msr-data/media on the encrypted volume).
+  NOT in S3 yet and not in the nightly backup - move to an encrypted S3 bucket at the Mumbai migration (needs IMDS hop limit 2 +
+  s3 Put/Get/Delete on media/* for the server role).
+- Reviewers (admin/supervisor/analyst with review access) play recordings / see photos on the interview review; each opening is in
+  the privacy access log; clients and surveyors get 403. File names never leave the server.
+- Admin sets "Keep for" 30-365 days (kv mediaRetentionDays, default 90) on Security & DPDP; deletion runs every 6 h (and "Run
+  deletion now"); interviews still Flagged / in Back-check keep their files until decided. Storage used + disk free shown there.
+- Tests: 41 (new server/test/media.test.js).
+
 **Round 2026-11-21 c (owner's test report) - DEPLOYED 2026-11-21 05:27 UTC, app version 2026-11-21T05:26:**
 - Root cause of "survey changes not reaching the Android app": the app had no server address built in; without one it silently ran
   in standalone demo mode (fake local data). Now build-android-apk.bat builds the address in (MSR_SERVER, default the test site;
@@ -239,8 +251,7 @@ team add/edit with login handling.
 - AI interview checker transcript on the review screen is simulated (no speech-to-text yet).
 - "Demo feed" button streams generated interviews (test mode only).
 - SMS is printed to the server log unless an SMS gateway is configured; demo OTP is 482913.
-- Audio recordings stay on the phone (not uploaded to the server yet).
-- Photos are recorded only as "taken / not taken"; the image is not uploaded.
+- Recordings and photos are stored on the server disk (encrypted), not yet in S3; no backup copy of them yet.
 - Evening digest "Send now" does not send anything yet (it says so); supervisors get the Excel back-check list.
 - "Round 1/2" comparison data and the GoSurvey import are generated sample data.
 

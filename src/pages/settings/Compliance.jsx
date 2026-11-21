@@ -1,5 +1,5 @@
 import React from 'react';
-import { Scale, CheckCircle2, Lock, Server, Trash2, FileCheck2, KeyRound, Globe2, ShieldCheck, Clock } from 'lucide-react';
+import { Scale, CheckCircle2, Lock, Server, Trash2, FileCheck2, KeyRound, Globe2, ShieldCheck, Clock, AudioLines } from 'lucide-react';
 import { useStore } from '../../store.jsx';
 import { api } from '../../lib/api.js';
 import { PageHead, Card, Badge, Stat } from '../../components/ui.jsx';
@@ -22,12 +22,13 @@ export default function Compliance() {
   const s = useStore();
   const test = !s.serverMode || s.server?.sample;
   const [lastRun, setLastRun] = React.useState(null);
+  const [usage, setUsage] = React.useState(null);
+  React.useEffect(() => { if (s.serverMode && s.can('settings.compliance') && !s.server?.offline) api('GET', '/api/admin/media-usage').then(setUsage).catch(() => {}); }, [s.serverMode, lastRun]); // eslint-disable-line react-hooks/exhaustive-deps
   // The real deletion policy (the server checks every 6 hours); no invented history
   const jobs = [
     ['Respondent names & mobile numbers', `Erased ${s.retentionDays} days after the interview`, 'Automatic, checked every 6 hours'],
     ['Other personal-detail questions', 'Erased together with names and mobiles', 'Automatic'],
-    ['Photos', 'Only “photo taken / not taken” is kept on the server', 'Photo upload not built yet'],
-    ['Audio recordings', 'Kept on the surveyor’s phone today', 'Upload + deletion policy planned'],
+    ['Interview recordings & photos', `Deleted ${s.mediaRetentionDays || 90} days after the interview`, 'Automatic; interviews still under review are kept until decided'],
   ];
   return (
     <div>
@@ -50,7 +51,16 @@ export default function Compliance() {
               <thead><tr><th>Data</th><th>Rule</th><th>How</th></tr></thead>
               <tbody>{jobs.map(([a, b, c]) => <tr key={a}><td className="bold small">{a}</td><td className="small">{b}</td><td className="small muted">{c}</td></tr>)}</tbody>
             </table>
-            {lastRun && <div className="small" style={{ padding: '10px 16px' }}>Last run just now: {lastRun.erased} interview(s) older than {lastRun.days} days cleaned.</div>}
+            {lastRun && <div className="small" style={{ padding: '10px 16px' }}>Last run just now: personal details removed from {lastRun.erased} interview(s) older than {lastRun.days} days; {lastRun.mediaDeleted || 0} recording(s)/photo(s) older than {lastRun.mediaDays} days deleted{lastRun.mediaHeld ? `, ${lastRun.mediaHeld} kept because still under review` : ''}.</div>}
+          </Card>
+          <Card title={<span className="row"><AudioLines size={16} />Recordings & photos</span>} sub="Reviewers use them to check interview quality. They contain the respondent’s voice, so they are personal data under the DPDP Act."
+            right={<div className="row"><span className="small muted">Keep for</span><select className="select" style={{ width: 120 }} value={s.mediaRetentionDays || 90} disabled={!s.can('settings.compliance')} onChange={(e) => { s.update({ mediaRetentionDays: Number(e.target.value) }); s.log(`Recordings & photos storage period set to ${e.target.value} days`); }}>{[30, 60, 90, 180, 365].map((d) => <option key={d} value={d}>{d} days</option>)}</select></div>}>
+            <div className="stack small" style={{ gap: 8 }}>
+              <div>Recordings and photos are uploaded from the phones after each interview and deleted automatically <b>{s.mediaRetentionDays || 90} days</b> after the interview. Interviews that are still flagged or in back-check keep them until a reviewer decides.</div>
+              <div>Only admins, supervisors and analysts with review access can open them, and every opening is recorded in the privacy access log. Clients never see them.</div>
+              {usage && <div className="row" style={{ gap: 6 }}><Badge tone="blue">{(usage.bytes / 1048576).toFixed(1)} MB in {usage.files} files</Badge>{usage.freeBytes !== null && <Badge tone={usage.freeBytes < 2 * 1073741824 ? 'red' : 'green'}>{(usage.freeBytes / 1073741824).toFixed(1)} GB free on the server</Badge>}</div>}
+              <div className="tiny muted">Stored on the server’s encrypted disk (MSR-owned key). At go-live they move to an encrypted S3 bucket in Mumbai.</div>
+            </div>
           </Card>
           <Card title="Ownership">
             <div className="stack small" style={{ gap: 8 }}>

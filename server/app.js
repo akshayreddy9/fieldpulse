@@ -18,6 +18,7 @@ import { findQuestion, SAMPLE_QUESTIONNAIRE } from '../src/data/questionnaire.js
 import { piiQuestions, piiKind, R } from '../src/lib/roles.js';
 import { mainQuestionId } from '../src/lib/reportGen.js';
 import { onTeam, boothsFor } from '../src/lib/team.js';
+import { mediaStore, MEDIA_KINDS, MAX_MEDIA_BYTES } from './media.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const APK = path.join(here, '..', 'MSR-Pulse.apk');
@@ -33,6 +34,7 @@ function blankQuestionnaire() {
 
 export function createApp({ dbFile = process.env.DB_FILE || path.join(here, '..', 'data', 'msr-pulse.db') } = {}) {
   const db = openDb(dbFile);
+  const media = mediaStore(dbFile);
   // Booth list: the uploaded one (kv "geo"), else the sample list on test sites; production starts empty
   setGeo(getKv(db, 'geo'));
   const app = express();
@@ -134,7 +136,8 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
   const need = (mod) => (req, res, next) => (can(req.user, mod) ? next() : res.status(403).json({ error: 'Your role does not allow this' }));
 
   // Personal details leave the server only as codes, unless the privacy lock is off and the role may see them.
-  const present = (i, user) => {
+  const present = (i0, user) => {
+    const i = i0.media ? { ...i0, media: Object.fromEntries(Object.entries(i0.media).map(([k, m]) => [k, { type: m.type, size: m.size, at: m.at, deleted: m.deleted }])) } : i0;
     const mask = getKv(db, 'privacyLock') || user.role === 'client' || user.role === 'surveyor' && i.surveyorId !== user.surveyorId;
     if (!mask) return i;
     const a = { ...i.answers };
@@ -354,6 +357,46 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
     return res.json({ added, quality: qual });
   });
 
+  // ---------- Recordings and photos ----------
+  const interviewRow = (id) => { const r = db.prepare('SELECT data, survey_id FROM interviews WHERE id = ?').get(String(id)); return r ? { i: JSON.parse(r.data), sid: r.survey_id } : null; };
+  const saveInterview = (i) => db.prepare('UPDATE interviews SET data = ? WHERE id = ?').run(JSON.stringify(i), i.id);
+  // The phone uploads the recording / photo after the interview itself has reached the server
+  app.post('/api/interviews/:id/media/:kind', auth, need('field'), express.raw({ type: () => true, limit: MAX_MEDIA_BYTES }), (req, res) => {
+    const { kind } = req.params;
+    if (!MEDIA_KINDS[kind]) return res.status(400).json({ error: 'Unknown kind of file' });
+    const type = String(req.headers['content-type'] || '').toLowerCase();
+    if (!MEDIA_KINDS[kind].some((p) => type.startsWith(p))) return res.status(400).json({ error: `A ${kind} file is expected` });
+    if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'The file is empty' });
+    const row = interviewRow(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Send the interview first' });
+    if (req.user.role === 'surveyor' && row.i.surveyorId !== req.user.surveyorId) return res.status(403).json({ error: 'Not your interview' });
+    const old = row.i.media?.[kind];
+    const meta = media.save(row.i.id, kind, req.body, type);
+    if (old?.file && old.file !== meta.file) media.remove(old);
+    row.i.media = { ...(row.i.media || {}), [kind]: meta };
+    saveInterview(row.i);
+    broadcast('interview', (u) => (visible(row.i, u) && canSeeSurvey(u, getSurvey(db, row.sid)) ? present({ ...row.i, surveyId: row.sid }, u) : undefined));
+    return res.json({ ok: true, size: meta.size });
+  });
+  // Reviewers (admin / supervisor / recording checker) listen to recordings and see photos. Every opening is logged.
+  const mayReview = (u) => ['admin', 'supervisor', 'analyst'].includes(u.role) && (can(u, 'live.alerts') || can(u, 'addons.checker') || can(u, 'admin.access'));
+  app.get('/api/interviews/:id/media/:kind', auth, (req, res) => {
+    if (!mayReview(req.user)) return res.status(403).json({ error: 'Your role cannot open recordings or photos' });
+    const row = interviewRow(req.params.id);
+    const meta = row?.i.media?.[req.params.kind];
+    if (!row || !canSeeSurvey(req.user, getSurvey(db, row.sid))) return res.status(404).json({ error: 'Not found' });
+    if (!meta || meta.deleted) return res.status(404).json({ error: meta?.deleted ? `Deleted on ${meta.deleted} (storage period ended)` : 'Not uploaded' });
+    const file = media.path(meta);
+    if (!file) return res.status(404).json({ error: 'File missing' });
+    const entry = { t: Date.now(), who: req.user.name, role: req.user.role, interviewId: row.i.id, field: req.params.kind === 'audio' ? 'Recording' : 'Photo', reason: 'Quality review' };
+    db.prepare('INSERT INTO access_log (t, who, role, interview_id, field, reason) VALUES (?,?,?,?,?,?)').run(entry.t, entry.who, entry.role, entry.interviewId, entry.field, entry.reason);
+    broadcast('access', entry, (u) => u.role === 'admin');
+    res.setHeader('Content-Type', meta.type);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.sendFile(file);
+  });
+  app.get('/api/admin/media-usage', auth, need('settings.compliance'), (req, res) => res.json(media.usage()));
+
   app.post('/api/audit', auth, (req, res) => {
     const what = String(req.body?.what || '').slice(0, 300);
     if (what) audit(req.user.name, what);
@@ -507,7 +550,27 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
     });
     db.exec('COMMIT');
     if (erased) { audit(by, `Erased personal details from ${erased} interviews older than ${days} days (DPDP retention)`); invalidate(); }
-    return { erased, days };
+    return { erased, days, ...runMediaRetention(by) };
+  }
+  // Recordings and photos are deleted after the storage period the admin chose, except while the interview is still
+  // being reviewed (flagged or in back-check): that evidence is kept until a reviewer decides, then deleted on the next run.
+  function runMediaRetention(by) {
+    const mediaDays = Number(getKv(db, 'mediaRetentionDays') || 90);
+    const cutoff = Date.now() - mediaDays * 86400000;
+    const rows = db.prepare("SELECT id, data, survey_id FROM interviews WHERE started_at < ? AND data LIKE '%\"media\"%'").all(cutoff);
+    const today = new Date().toISOString().slice(0, 10);
+    let mediaDeleted = 0; let held = 0;
+    rows.forEach((r) => {
+      const i = JSON.parse(r.data);
+      const live = Object.entries(i.media || {}).filter(([, m]) => m && !m.deleted);
+      if (!live.length) return;
+      const status = (getS(db, r.survey_id, 'statuses') || {})[i.id] || autoStatus(quality(r.survey_id)[i.id]);
+      if (status === 'Flagged' || status === 'Back-check') { held++; return; }
+      live.forEach(([k, m]) => { media.remove(m); i.media[k] = { type: m.type, size: m.size, at: m.at, deleted: today }; mediaDeleted++; });
+      saveInterview(i);
+    });
+    if (mediaDeleted) audit(by, `Deleted ${mediaDeleted} recordings/photos older than ${mediaDays} days${held ? ` (${held} interviews under review kept)` : ''}`);
+    return { mediaDeleted, mediaHeld: held, mediaDays };
   }
   runRetention();
   setInterval(() => runRetention(), 6 * 3600000).unref();
