@@ -31,10 +31,11 @@ export const STATE_RULES = {
   peakMonths: { perm: 'settings.delivery' },
   retentionDays: { perm: 'settings.compliance' },
   geo: { perm: 'admin.access' }, // booth list: shared by all surveys, admins only
+  team: { perm: 'admin.team' }, // who works on a survey (null = everyone), per survey
 };
 
 // What each role may read from shared state
 export const READABLE = {
   client: ['questionnaire', 'report', 'reportStatus', 'privacyLock', 'round1Imported', 'permissions', 'geo', 'targets'],
-  surveyor: ['questionnaire', 'publishedVersion', 'targets', 'surveyors', 'permissions', 'privacyLock', 'geo'],
+  surveyor: ['questionnaire', 'publishedVersion', 'targets', 'surveyors', 'permissions', 'privacyLock', 'geo', 'team'],
 };

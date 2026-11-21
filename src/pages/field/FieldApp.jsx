@@ -12,6 +12,10 @@ import { boothProgress, istDay } from '../../lib/analytics.js';
 import { AUDIO } from '../../lib/audio.js';
 import { A, R, targetCategories } from '../../lib/roles.js';
 import { newInterviewId } from '../../lib/outbox.js';
+import { onTeam, boothsFor } from '../../lib/team.js';
+
+// Surveyors on the open survey's team, each with their booths for THIS survey
+const surveyTeam = (s) => s.surveyors.filter((x) => x.role === 'Surveyor' && onTeam(s.team, x.id)).map((x) => ({ ...x, boothIds: boothsFor(x, s.team) }));
 
 const mmss = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
@@ -21,22 +25,23 @@ const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good 
 // Shown instead of the app when there is nothing to work on yet
 export default function FieldApp(props) {
   const s = useStore();
-  const team = s.surveyors.filter((x) => x.role === 'Surveyor' && x.boothIds?.length);
+  const team = surveyTeam(s).filter((x) => x.boothIds?.length);
   const isSurveyor = s.user.role === 'surveyor';
   const me = isSurveyor ? team.find((x) => x.id === s.user.surveyorId) : team[0];
   let msg = null;
   if (!GEO.booths.length) msg = ['No booth list yet', isSurveyor ? 'MSR has not loaded the booth list yet. Ask your supervisor.' : 'Upload the booth list first: Set up > Booth list.'];
-  else if (s.serverMode && !s.surveyId) msg =['No survey is running right now', isSurveyor ? 'When MSR starts fieldwork for a survey, it will appear here.' : 'Create a survey and start its fieldwork first.'];
-  else if (!me) msg = isSurveyor ? ['Your booth is not set up yet', 'Ask your supervisor to add you, with your booth, in the surveyor list.'] : ['No surveyors yet', 'Upload the surveyor list from Excel on Surveyors & team.'];
+  else if (s.serverMode && !s.surveyId) msg = ['No survey is open for you right now', isSurveyor ? 'When MSR starts a survey and adds you to its team, it appears here automatically.' : 'Create a survey and start its fieldwork first.'];
+  else if (!me) msg = isSurveyor ? ['Your booth is not set up for this survey', 'Ask your supervisor to give you a booth for this survey on Surveyors & team.'] : ['No surveyors on this survey yet', 'Add people to this survey’s team on Surveyors & team.'];
   else if (isSurveyor && !me.boothIds.some((b) => BOOTH_BY_ID[b])) msg = ['Your booth is not in the booth list', `Booth ${me.boothIds[0]} is not in MSR's booth list. Ask your supervisor to correct your booth in the surveyor list.`];
-  if (msg) return <div className="fapp" style={{ display: 'grid', placeItems: 'center', padding: 24, textAlign: 'center' }}><div><Smartphone size={34} className="faint" /><h3 style={{ marginTop: 10 }}>{msg[0]}</h3><p className="muted small">{msg[1]}</p></div></div>;
+  if (msg) return <div className="fapp" style={{ display: 'grid', placeItems: 'center', padding: 24, textAlign: 'center' }}><div><Smartphone size={34} className="faint" /><h3 style={{ marginTop: 10 }}>{msg[0]}</h3><p className="muted small">{msg[1]}</p>
+    {s.serverMode && s.surveys.length > 1 && <select className="select mt8" style={{ height: 44 }} value={s.surveyId || ''} onChange={(e) => s.selectSurvey(e.target.value)}>{s.surveys.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}</select>}</div></div>;
   return <FieldAppInner {...props} />;
 }
 
 function FieldAppInner({ mode = 'preview' }) {
   const s = useStore();
   const app = mode === 'app';
-  const surveyorsOnly = s.surveyors.filter((x) => x.role === 'Surveyor');
+  const surveyorsOnly = surveyTeam(s).filter((x) => x.boothIds.length);
   const [svId, setSvId] = useState((s.user.role === 'surveyor' && s.user.surveyorId) || surveyorsOnly[0].id);
   const demo = !(s.serverMode && !s.server?.demo);
 
@@ -58,7 +63,7 @@ function FieldAppInner({ mode = 'preview' }) {
     return () => { clearTimeout(first); clearInterval(again); };
   }, [s.deviceOnline, hasWaiting]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sv = surveyorsOnly.find((x) => x.id === svId) || surveyorsOnly[0];
+  const sv = surveyorsOnly.find((x) => x.id === svId) || surveyorsOnly[0]; // booths are this survey's
   const boothId = sv.boothIds.find((b) => BOOTH_BY_ID[b]) || sv.boothIds[0];
   const booth = BOOTH_BY_ID[boothId] || GEO.booths[0];
   const [tab, setTab] = useState('home');
@@ -247,12 +252,26 @@ function FieldAppInner({ mode = 'preview' }) {
                     <div className="tiny muted">Surveyor {sv.id}</div>
                   </div>
                 </div>
+                {/* Several surveys at the same time: tap one to work on it (works offline for surveys opened on this phone before) */}
                 {s.serverMode && s.surveys.length > 1 && (
                   <div className="fa-card" style={{ marginBottom: 0 }}>
-                    <div className="tiny bold muted">SURVEY YOU ARE WORKING ON</div>
-                    <select className="select mt8" style={{ height: 44 }} value={s.surveyId || ''} onChange={(e) => s.selectSurvey(e.target.value)}>
-                      {s.surveys.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
-                    </select>
+                    <div className="tiny bold muted">YOUR SURVEYS ({s.surveys.length}) · TAP ONE TO WORK ON IT</div>
+                    <div className="stack mt8" style={{ gap: 6 }}>
+                      {s.surveys.map((x) => {
+                        const on = x.id === s.surveyId;
+                        const waiting = s.outbox.filter((o) => o.surveyId === x.id).length;
+                        return (
+                          <button key={x.id} type="button" className={`fa-opt ${on ? 'on' : ''}`} style={{ margin: 0 }} onClick={() => !on && s.selectSurvey(x.id)}>
+                            <span className="box">{on && <CheckCircle2 size={13} color="#fff" />}</span>
+                            <span style={{ flex: 1, textAlign: 'left' }}>
+                              <span className="bold small" style={{ display: 'block' }}>{x.title}</span>
+                              <span className="tiny muted">{(x.myBooths || []).map((b) => BOOTH_BY_ID[b]?.short || b).join(', ') || 'Your usual booth'}{x.myInterviews !== undefined ? ` · ${x.myInterviews} done` : ''}{waiting ? ` · ${waiting} waiting to send` : ''}</span>
+                            </span>
+                            {on && <span className="badge teal">Working on</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
                 <div className="stat-row">

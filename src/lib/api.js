@@ -44,6 +44,7 @@ export async function api(method, path, body) {
   try {
     res = await fetch(API_BASE + path, {
       method,
+      cache: 'no-store', // always ask the server: never show an old copy (e.g. of the survey list)
       headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...stageHeader() },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });

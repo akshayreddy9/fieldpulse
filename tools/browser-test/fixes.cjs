@@ -86,7 +86,7 @@ const SH = __dirname + '/';
   await tin[0].type('Ravi Fixtest'); await tin[1].type('9000011111');
   await a.evaluate(() => { const c = document.querySelector('.modal .chip'); c && c.click(); });
   await wait(200);
-  await clickText(a, '.modal button', 'Add person'); await wait(1500);
+  await clickText(a, '.modal button', 'Add surveyor'); await wait(1500);
   check('team: new person in list', await has(a, 'Ravi Fixtest'));
   await a.screenshot({ path: SH + 'fix-team.png' });
 

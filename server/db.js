@@ -48,11 +48,11 @@ export function openDb(file) {
 
 // ---------- Surveys: each survey has its own questionnaire, targets, reviews and report ----------
 export const FIRST_SURVEY = 'TSP-R3';
-export const SURVEY_KEYS = ['questionnaire', 'draftQuestionnaire', 'publishedVersion', 'targets', 'statuses', 'notes', 'report', 'reportStatus', 'reportHistory', 'round1Imported'];
+export const SURVEY_KEYS = ['questionnaire', 'draftQuestionnaire', 'publishedVersion', 'targets', 'statuses', 'notes', 'report', 'reportStatus', 'reportHistory', 'round1Imported', 'team'];
 const sKey = (sid, k) => `survey:${sid}:${k}`;
 export const getS = (db, sid, k, fallback = null) => getKv(db, sKey(sid, k), fallback);
 export const setS = (db, sid, k, v) => setKv(db, sKey(sid, k), v);
-export const SURVEY_DEFAULTS = (qn) => ({ questionnaire: qn, draftQuestionnaire: null, publishedVersion: qn.version, targets: {}, statuses: {}, notes: {}, report: null, reportStatus: 'Not started', reportHistory: [], round1Imported: false });
+export const SURVEY_DEFAULTS = (qn) => ({ questionnaire: qn, draftQuestionnaire: null, publishedVersion: qn.version, targets: {}, statuses: {}, notes: {}, report: null, reportStatus: 'Not started', reportHistory: [], round1Imported: false, team: null });
 export function getSurvey(db, sid) { return db.prepare('SELECT * FROM surveys WHERE id = ?').get(sid) || null; }
 export function listSurveys(db) { return db.prepare('SELECT * FROM surveys ORDER BY created DESC').all(); }
 

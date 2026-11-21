@@ -13,7 +13,7 @@ const KEY = 'msr-pulse-demo-v1';
 const CACHE_KEY = 'msr-pulse-offline-cache';
 const SURVEY_SEL_KEY = 'msr-pulse-survey';
 // Settings that belong to one survey (the rest are shared by all surveys)
-const SURVEY_SYNC = ['questionnaire', 'draftQuestionnaire', 'publishedVersion', 'targets', 'statuses', 'notes', 'report', 'reportStatus', 'reportHistory'];
+const SURVEY_SYNC = ['questionnaire', 'draftQuestionnaire', 'publishedVersion', 'targets', 'statuses', 'notes', 'report', 'reportStatus', 'reportHistory', 'team'];
 const readJson = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } };
 const writeJson = (k, v) => { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage full or blocked */ } };
 
@@ -102,7 +102,7 @@ const Ctx = createContext(null);
 
 // Shared settings that are saved on the server (each change is checked against the user's role there).
 const SYNC_KEYS = ['questionnaire', 'draftQuestionnaire', 'publishedVersion', 'targets', 'surveyors', 'permissions', 'statuses', 'notes', 'report', 'reportStatus',
-  'reportHistory', 'privacyLock', 'webhooks', 'peakMonths', 'retentionDays', 'geo'];
+  'reportHistory', 'privacyLock', 'webhooks', 'peakMonths', 'retentionDays', 'geo', 'team'];
 
 export function StoreProvider({ children }) {
   const [state, setState] = useState(load);
@@ -123,25 +123,45 @@ export function StoreProvider({ children }) {
   // ---------- server connection ----------
   const surveyRef = useRef(null);
   // Loads everything for one survey (the saved one, or the first the user may see)
-  const loadAll = useCallback(async (want) => {
+  // Loads are numbered: if a newer load starts (e.g. the survey was taken away while this one was loading), the newer one wins
+  const loadGen = useRef(0);
+  const loadingSid = useRef(null);
+  const loadAll = useCallback(async (want, retry = true) => {
+    const gen = ++loadGen.current;
     const surveys = await api('GET', '/api/surveys');
     const saved = want || readJson(SURVEY_SEL_KEY);
     const sid = (surveys.find((x) => x.id === saved) || surveys.find((x) => x.status === 'Live') || surveys[0] || {}).id || null;
+    loadingSid.current = sid;
     const q = sid ? `survey=${encodeURIComponent(sid)}` : '';
-    const st = await api('GET', `/api/state?${q}`);
-    const [r3, r2, r1] = sid ? await Promise.all([
-      api('GET', `/api/interviews?round=3&${q}`),
-      api('GET', `/api/interviews?round=2&${q}`),
-      st.round1Imported ? api('GET', `/api/interviews?round=1&${q}`) : Promise.resolve([]),
-    ]) : [[], [], []];
+    let st;
+    let r3; let r2; let r1;
+    try {
+      st = await api('GET', `/api/state?${q}`);
+      [r3, r2, r1] = sid ? await Promise.all([
+        api('GET', `/api/interviews?round=3&${q}`),
+        api('GET', `/api/interviews?round=2&${q}`),
+        st.round1Imported ? api('GET', `/api/interviews?round=1&${q}`) : Promise.resolve([]),
+      ]) : [[], [], []];
+    } catch (e) {
+      // The survey was closed or this user was taken off its team a moment ago: open the right one instead
+      if (retry && (e.status === 403 || e.status === 404)) { if (sid === readJson(SURVEY_SEL_KEY)) writeJson(SURVEY_SEL_KEY, null); return loadAll(null, false); }
+      throw e;
+    } finally { if (gen === loadGen.current) loadingSid.current = null; }
+    if (gen !== loadGen.current) return undefined; // a newer load has started
     surveyRef.current = sid;
     writeJson(SURVEY_SEL_KEY, sid);
     synced.current = {};
     SYNC_KEYS.forEach((k) => { if (k in st) synced.current[k] = st[k]; });
     setState((s) => ({ ...s, ...st, surveys, surveyId: sid, extraInterviews: [] }));
     setRemote({ r3, r2, r1 });
-    const keep = ['questionnaire', 'publishedVersion', 'targets', 'surveyors', 'permissions', 'privacyLock', 'geo'];
-    writeJson(CACHE_KEY, { ...(readJson(CACHE_KEY) || {}), state: { ...Object.fromEntries(keep.filter((k) => k in st).map((k) => [k, st[k]])), surveyId: sid, surveys }, r3: r3.length <= 500 ? r3 : [], at: Date.now() });
+    const keep = ['questionnaire', 'publishedVersion', 'targets', 'surveyors', 'permissions', 'privacyLock', 'geo', 'team'];
+    const old = readJson(CACHE_KEY) || {};
+    // Each survey opened on this phone is remembered, so a surveyor can switch between surveys with no signal
+    const perSurvey = ['questionnaire', 'publishedVersion', 'targets', 'team'];
+    const bySurvey = { ...(old.bySurvey || {}) };
+    if (sid) bySurvey[sid] = { ...Object.fromEntries(perSurvey.filter((k) => k in st).map((k) => [k, st[k]])), r3: r3.length <= 500 ? r3 : [] };
+    Object.keys(bySurvey).forEach((k) => { if (!surveys.some((x) => x.id === k)) delete bySurvey[k]; }); // forget surveys no longer offered
+    writeJson(CACHE_KEY, { ...old, bySurvey, state: { ...Object.fromEntries(keep.filter((k) => k in st).map((k) => [k, st[k]])), surveyId: sid, surveys }, r3: r3.length <= 500 ? r3 : [], at: Date.now() });
   }, []);
 
   useEffect(() => {
@@ -179,6 +199,29 @@ export function StoreProvider({ children }) {
     return () => { alive = false; };
   }, [loadAll]);
 
+  // A survey was created, started, closed or its team changed: refresh the list, and move off a survey this user may no longer use
+  const refreshSurveys = useCallback(async () => {
+    try {
+      const surveys = await api('GET', '/api/surveys');
+      setState((s) => ({ ...s, surveys }));
+      const cur = surveys.find((x) => x.id === surveyRef.current);
+      const loadingGone = loadingSid.current && !surveys.some((x) => x.id === loadingSid.current);
+      if (cur && surveyRef.current && !loadingGone) return;
+      if (!surveyRef.current && !surveys.length) return;
+      const had = surveyRef.current;
+      await loadAll();
+      toast(had ? 'The survey you were on is no longer open to you. Switched to your current survey.' : 'A survey is now open for you.', 'info');
+    } catch { /* offline: try again later */ }
+  }, [loadAll, toast]);
+  // Phones miss live updates while the screen is off: check again when the app comes back to the front or gets signal
+  useEffect(() => {
+    if (!serverMode || !state.user || server?.offline) return undefined;
+    const again = () => { if (document.visibilityState === 'visible') refreshSurveys(); };
+    document.addEventListener('visibilitychange', again);
+    window.addEventListener('online', again);
+    return () => { document.removeEventListener('visibilitychange', again); window.removeEventListener('online', again); };
+  }, [serverMode, state.user, server, refreshSurveys]);
+
   // Live updates from the server (other users' changes, new interviews from the field)
   useEffect(() => {
     if (!serverMode || !state.user || !getToken()) return undefined;
@@ -197,10 +240,10 @@ export function StoreProvider({ children }) {
     });
     es.addEventListener('audit', (e) => { const a = JSON.parse(e.data); setState((s) => ({ ...s, audit: [a, ...s.audit].slice(0, 300) })); });
     es.addEventListener('access', (e) => { const a = JSON.parse(e.data); setState((s) => ({ ...s, accessLog: [a, ...s.accessLog.filter((x) => x.t !== a.t)].slice(0, 500) })); });
-    es.addEventListener('surveys', () => { api('GET', '/api/surveys').then((surveys) => setState((s) => ({ ...s, surveys }))).catch(() => {}); });
+    es.addEventListener('surveys', () => { refreshSurveys(); });
     es.addEventListener('reset', () => { loadAll(); toast('Data was reset by an admin', 'info'); });
     return () => es.close();
-  }, [serverMode, state.user, loadAll, toast]);
+  }, [serverMode, state.user, loadAll, toast, refreshSurveys]);
 
   // Push local changes of shared settings to the server
   useEffect(() => {
@@ -406,7 +449,24 @@ export function StoreProvider({ children }) {
   const aiAsk = useCallback(async (text) => (serverMode && server?.ai ? api('POST', '/api/ai/ask', { text, surveyId: surveyRef.current }) : null), [serverMode, server]);
 
   // ---------- surveys ----------
-  const selectSurvey = useCallback(async (id) => { setState((s) => ({ ...s, liveSim: false })); await loadAll(id); }, [loadAll]);
+  const selectSurvey = useCallback(async (id) => {
+    setState((s) => ({ ...s, liveSim: false }));
+    // No signal: use the copy of that survey saved on this phone (if it was opened here before)
+    if (server?.offline) {
+      const cache = readJson(CACHE_KEY) || {};
+      const saved = cache.bySurvey?.[id];
+      if (!saved) { toast('This survey has not been opened on this phone yet. Connect to the internet once to download it.', 'error'); return; }
+      const { r3, ...rest } = saved;
+      surveyRef.current = id;
+      writeJson(SURVEY_SEL_KEY, id);
+      SURVEY_SYNC.forEach((k) => { if (k in rest) synced.current[k] = rest[k]; });
+      setState((s) => ({ ...s, ...rest, surveyId: id, extraInterviews: [] }));
+      setRemote({ r3: r3 || [], r2: [], r1: [] });
+      writeJson(CACHE_KEY, { ...cache, state: { ...cache.state, ...rest, surveyId: id }, r3: r3 || [] });
+      return;
+    }
+    try { await loadAll(id); } catch (e) { toast(e.status === 0 ? 'No connection. Try again when you have signal.' : e.message, 'error'); }
+  }, [loadAll, server, toast]);
   const createSurvey = useCallback(async (body) => { const sv = await api('POST', '/api/surveys', body); await loadAll(sv.id); return sv; }, [loadAll]);
   const updateSurvey = useCallback(async (id, patch) => {
     const sv = await api('PUT', `/api/surveys/${id}`, patch);

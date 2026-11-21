@@ -83,7 +83,7 @@ server/
   db.js                     schema, migrations, seed (sample or production), SURVEY_KEYS (per-survey settings)
   permissions.js            role defaults, STATE_RULES (who may change what), READABLE
   auth.js, sms.js (console or webhook SMS gateway), ai.js, backup.js
-  test/api.test.js, test/surveys.test.js, test/booths-roles.test.js   32 automated tests (node --test)
+  test/api.test.js, test/surveys.test.js, test/booths-roles.test.js, test/teams.test.js   36 automated tests (node --test)
 deploy/aws/msr-pulse-aws.yaml   CloudFormation template for the whole AWS setup
 deploy/aws/update-live-site.ps1 upload release + install on server (one step)
 deploy/aws/remote.ps1           run a shell command on the server via AWS Systems Manager (no SSH)
@@ -118,7 +118,7 @@ Project folder: `C:\Users\akashreddy1\OneDrive\Desktop\MSR`
 | Task | Command |
 |---|---|
 | Install | `npm install` |
-| Automated tests (must pass) | `npm test` → 32 tests |
+| Automated tests (must pass) | `npm test` → 36 tests |
 | Version control | git repo in the project folder (branch `main`). Commit after each change; `git log` shows history |
 | Build web app | `npx vite build` (output `dist/`) |
 | Local server with demo data | `DEMO_MODE=1 node server/index.js` → http://localhost:8787 (Git Bash syntax; delete `data/msr-pulse.db` for a fresh seed) |
@@ -196,6 +196,21 @@ team add/edit with login handling.
   (old 6-digit ids could collide and the server silently dropped the second interview).
 - One crashing screen no longer blanks the whole app (error boundary). Evening digest crash with a non-sample booth list fixed.
 
+**Round 2026-11-21 b (owner's reported problems, NOT yet deployed):**
+- Survey teams: each survey has a per-survey setting `team` (null = everyone; else { members: { personId: { boothIds } } },
+  empty boothIds = usual booths). Set on Team & people ("Team for this survey") or via the "Team" button on Surveys.
+  Server: surveyors only see / load Live surveys they are on (`canSeeSurvey`); finished interviews are still accepted if
+  the surveyor was removed later. Helpers in `src/lib/team.js` (onTeam, boothsFor).
+- Phones follow survey changes live: start/close/team change broadcasts `surveys`; the phone refreshes and moves off a
+  survey it may no longer use; also re-checks when the app returns to the foreground or gets signal. Loads are race-safe.
+- API responses are sent `Cache-Control: no-store` and the app fetches with `cache: 'no-store'` (phones could show an old
+  survey list from their browser cache - likely cause of "survey changed but not on the surveyor's phone").
+- Several surveys at once: the surveyor home lists all their surveys (booths, done, waiting) - tap to switch; works offline
+  for surveys opened on that phone before (cache `bySurvey`).
+- "Add person" offers Surveyor, Supervisor, Analyst, Admin, Client (office roles create a login; listed under "Office staff
+  & client logins" with edit / switch off; logins can be renamed). Menu "Surveyors & team" is now "Team & people".
+- Tests: 36 (new server/test/teams.test.js).
+
 **Round 2026-11-21 (client-review polish, NOT yet deployed):**
 - UI: dashboard "Needs your attention" list; alerts filter + "back-check all" per surveyor; over-quota shown purple "+n" on
   targets; clearer surveyor booth status (answer labels, not codes); long single-choice lists (>8) are a pick-list on phones;
@@ -239,6 +254,6 @@ team add/edit with login handling.
 - Sample geography (6 constituencies, 72 booths) is demo data; load MSR's real booth list (Set up > Booth list) before going live.
   The booth list is shared by all surveys. Surveyors/targets pointing at booths not in the list are flagged on upload.
 - Survey rounds are still fixed as round 3 = current, 2 = previous, 1 = imported (data model), labels are generic now.
-- `surveyors` (team list) is shared across all surveys, not per survey.
+- The team list (`surveyors`) is shared by all surveys; each survey chooses its members and optional booths (`team`).
 - Free sslip.io HTTPS name is fine for testing; use a real domain for production.
 - t3.small is enough for testing; review size and cost before real fieldwork.

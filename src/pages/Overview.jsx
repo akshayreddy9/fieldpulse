@@ -11,6 +11,7 @@ import { frequency, istDay, latestDay, rollup } from '../lib/analytics.js';
 import { findQuestion } from '../data/questionnaire.js';
 import { GEO } from '../data/geo.js';
 import { mainQuestionId } from '../lib/reportGen.js';
+import { onTeam, boothsFor } from '../lib/team.js';
 import { colorFor } from '../components/charts.jsx';
 
 const STEPS = [
@@ -51,7 +52,7 @@ export default function Overview() {
     const out = [];
     const booths = ru.children.flatMap((c) => c.children.flatMap((m) => m.children));
     const behind = booths.filter((b) => b.target && b.pct < 50).length;
-    const team = s.surveyors.filter((x) => x.role === 'Surveyor' && x.status !== 'Inactive' && (x.boothIds || []).length);
+    const team = s.surveyors.filter((x) => x.role === 'Surveyor' && x.status !== 'Inactive' && onTeam(s.team, x.id) && boothsFor(x, s.team).length);
     const activeToday = new Set(s.interviews.filter((i) => istDay(i.startedAt) === istDay(Date.now())).map((i) => i.surveyorId));
     const idle = team.filter((x) => !activeToday.has(x.id)).length;
     if (flaggedOpen) out.push(['red', <><b>{flaggedOpen}</b> flagged interviews are waiting for review</>, '/live/alerts']);
@@ -64,7 +65,7 @@ export default function Overview() {
     if (survey?.status === 'Draft') out.push(['blue', <>This survey is still a <b>Draft</b>. Surveyors cannot see it until fieldwork starts</>, '/admin/surveys']);
     if (s.reportStatus === 'Approved') out.push(['blue', <>The client report is approved but <b>not sent</b> to the client yet</>, '/insights/report']);
     return out;
-  }, [flaggedOpen, ru, s.surveyors, s.interviews, survey, s.draftQuestionnaire, mainId, s.reportStatus]);
+  }, [flaggedOpen, ru, s.surveyors, s.team, s.interviews, survey, s.draftQuestionnaire, mainId, s.reportStatus]);
 
   return (
     <div className="stack" style={{ gap: 20 }}>
@@ -73,7 +74,7 @@ export default function Overview() {
           <div style={{ minWidth: 0, flex: 1 }}>
             <div className="tiny" style={{ color: '#5eead4', fontWeight: 700, letterSpacing: '.08em' }}>{({ Live: 'FIELDWORK LIVE', Draft: 'DRAFT SURVEY', Closed: 'CLOSED SURVEY' })[survey?.status] || 'SURVEY'}{s.questionnaire.client ? ` · ${s.questionnaire.client.toUpperCase()}` : ''}</div>
             <h2 className="mt8">{s.questionnaire.title.en}</h2>
-            <p>{GEO.constituencies.length} constituencies · {GEO.mandals.length} mandals · {GEO.booths.length} booths · {s.surveyors.filter((x) => x.role === 'Surveyor').length} surveyors in the field</p>
+            <p>{GEO.constituencies.length} constituencies · {GEO.mandals.length} mandals · {GEO.booths.length} booths · {s.surveyors.filter((x) => x.role === 'Surveyor' && onTeam(s.team, x.id)).length} surveyors in the field</p>
           </div>
           <button className="btn teal" onClick={() => nav('/live')}><Activity size={15} />Open live view</button>
         </div>

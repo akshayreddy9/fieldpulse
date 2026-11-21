@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardList, Plus, ArrowRight, Pencil, PlayCircle, StopCircle, Info, FileEdit, UserPlus } from 'lucide-react';
+import { ClipboardList, Plus, ArrowRight, Pencil, PlayCircle, StopCircle, Info, FileEdit, UserPlus, Users } from 'lucide-react';
 import { useStore } from '../../store.jsx';
 import { PageHead, Card, Badge, Modal } from '../../components/ui.jsx';
 import { api } from '../../lib/api.js';
@@ -68,7 +68,7 @@ export default function Surveys() {
       <Card flush>
         <div className="table-wrap">
           <table className="t">
-            <thead><tr><th>Survey</th><th>Client</th><th>Status</th><th className="num">Interviews</th><th>Created</th><th /></tr></thead>
+            <thead><tr><th>Survey</th><th>Client</th><th>Status</th><th className="num">Interviews</th><th>Team</th><th>Created</th><th /></tr></thead>
             <tbody>
               {s.surveys.map((sv) => (
                 <tr key={sv.id} className={sv.id === s.surveyId ? 'sel' : ''}>
@@ -76,6 +76,7 @@ export default function Surveys() {
                   <td>{sv.clientName || <span className="faint">No client yet</span>}</td>
                   <td><Badge tone={STATUS_TONE[sv.status]}>{sv.status}</Badge></td>
                   <td className="num">{sv.interviews.toLocaleString('en-IN')}</td>
+                  <td className="small">{sv.teamSize === null || sv.teamSize === undefined ? <span className="muted">Everyone</span> : <b>{sv.teamSize} people</b>}</td>
                   <td className="small muted">{new Date(sv.created).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                   <td className="right-align">
                     <div className="row nowrap" style={{ justifyContent: 'flex-end', gap: 4 }}>
@@ -84,6 +85,7 @@ export default function Surveys() {
                       {sv.status === 'Closed' && <button className="btn sm" onClick={() => setStatus(sv, 'Live')}><PlayCircle size={14} />Reopen</button>}
                       <button className="btn sm" onClick={() => open(sv, '/admin/builder')} title="Change the questions, then publish them to the phones"><FileEdit size={14} />Edit questions</button>
                       <button className="btn ghost sm" onClick={() => setForm({ mode: 'edit', id: sv.id, title: sv.title, clientPhone: sv.clientPhone || '', status: sv.status, newClientName: '', newClientPhone: '' })} title="Name, client and status"><Pencil size={14} />Details</button>
+                      <button className="btn sm" onClick={() => open(sv, '/admin/team')} title="Choose who works on this survey and at which booths"><Users size={14} />Team</button>
                       <button className="btn ghost sm" onClick={() => open(sv)} title="Open this survey's dashboard">Dashboard<ArrowRight size={14} /></button>
                     </div>
                   </td>

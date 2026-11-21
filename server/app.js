@@ -17,6 +17,7 @@ import { BOOTH_BY_ID, setGeo, validateGeo } from '../src/data/geo.js';
 import { findQuestion, SAMPLE_QUESTIONNAIRE } from '../src/data/questionnaire.js';
 import { piiQuestions, piiKind, R } from '../src/lib/roles.js';
 import { mainQuestionId } from '../src/lib/reportGen.js';
+import { onTeam, boothsFor } from '../src/lib/team.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const APK = path.join(here, '..', 'MSR-Pulse.apk');
@@ -41,6 +42,8 @@ export function createApp({ dbFile = process.env.DB_FILE || path.join(here, '..'
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    // API answers must never come from a phone's cache (e.g. an old survey list after a survey was changed)
+    if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
     next();
   });
   // The native iPhone/Android apps (Capacitor) call the API from their own origin.
@@ -143,9 +146,22 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
 
   // Who may see which survey: MSR staff see all; clients only their own; surveyors only live surveys.
   const STAFF = ['admin', 'supervisor', 'analyst'];
-  const canSeeSurvey = (user, sv) => !!sv && (STAFF.includes(user.role) || (user.role === 'client' && sv.client_phone === user.phone) || (user.role === 'surveyor' && sv.status === 'Live'));
-  const surveyView = (sv) => ({ id: sv.id, title: sv.title, clientName: sv.client_name, clientPhone: sv.client_phone, status: sv.status, created: sv.created,
-    interviews: db.prepare('SELECT COUNT(*) n FROM interviews WHERE survey_id = ? AND round = 3').get(sv.id).n });
+// Surveyors see only Live surveys whose team they are on (no team set = everyone)
+  const canSeeSurvey = (user, sv) => !!sv && (STAFF.includes(user.role) || (user.role === 'client' && sv.client_phone === user.phone)
+    || (user.role === 'surveyor' && sv.status === 'Live' && onTeam(getS(db, sv.id, 'team'), user.surveyorId)));
+  const surveyView = (sv, user) => {
+    const team = getS(db, sv.id, 'team');
+    const out = { id: sv.id, title: sv.title, clientName: sv.client_name, clientPhone: sv.client_phone, status: sv.status, created: sv.created,
+      interviews: db.prepare('SELECT COUNT(*) n FROM interviews WHERE survey_id = ? AND round = 3').get(sv.id).n,
+      teamSize: team?.members ? Object.keys(team.members).length : null };
+    if (user?.role === 'surveyor') {
+      // The surveyor's own booths and interview count in this survey, for their phone's survey list
+      const me = (getKv(db, 'surveyors') || []).find((x) => x.id === user.surveyorId);
+      out.myBooths = boothsFor(me, team);
+      out.myInterviews = db.prepare('SELECT COUNT(*) n FROM interviews WHERE survey_id = ? AND round = 3 AND surveyor_id = ?').get(sv.id, user.surveyorId || '').n;
+    }
+    return out;
+  };
   // Resolves ?survey= (or the first survey the user may see). Sends 403/404 and returns null when not allowed.
   const pickSurvey = (req, res, required = true) => {
     const want = req.query.survey || req.body?.surveyId;
@@ -194,7 +210,7 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
   app.get('/api/me', auth, (req, res) => res.json({ user: req.user }));
 
   app.get('/api/surveys', auth, (req, res) => {
-    res.json(listSurveys(db).filter((x) => canSeeSurvey(req.user, x)).map(surveyView));
+    res.json(listSurveys(db).filter((x) => canSeeSurvey(req.user, x)).map((x) => surveyView(x, req.user)));
   });
   // New survey (admin): copies a questionnaire to start from, starts as Draft
   app.post('/api/surveys', auth, (req, res) => {
@@ -285,6 +301,12 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
       });
     }
     if (['statuses', 'notes', 'questionnaire'].includes(req.params.key)) invalidate(sv?.id);
+    // A team change adds or removes the survey from surveyors' phones right away
+    if (req.params.key === 'team') {
+      const n = value?.members ? Object.keys(value.members).length : null;
+      audit(req.user.name, `Survey "${sv.title}": team set to ${n === null ? 'everyone' : `${n} people`}`);
+      broadcast('surveys', {});
+    }
     if (req.params.key === 'geo') {
       setGeo(value);
       invalidate();
@@ -313,7 +335,9 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
       if (!i?.id || !booth || !i.answers || typeof i.startedAt !== 'number' || !i.gps) return res.status(400).json({ error: `Interview ${i?.id || '?'} is incomplete` });
       if (!i.consent?.agreed) return res.status(400).json({ error: `Interview ${i.id} has no recorded consent` });
       const sv = getSurvey(db, i.surveyId || FIRST_SURVEY);
-      if (!sv || !canSeeSurvey(req.user, sv)) return res.status(403).json({ error: 'Interview ' + i.id + ': survey not available' });
+      // Interviews already done are accepted even if the surveyor was later taken off this survey's team
+      const mayAdd = sv && (canSeeSurvey(req.user, sv) || (req.user.role === 'surveyor' && sv.status === 'Live'));
+      if (!mayAdd) return res.status(403).json({ error: 'Interview ' + i.id + ': survey not available' });
       if (sv.status === 'Closed') return res.status(400).json({ error: 'Survey "' + sv.title + '" is closed' });
       const surveyorId = req.user.role === 'surveyor' ? req.user.surveyorId : i.surveyorId;
       clean.push({ ...i, surveyId: sv.id, id: String(i.id).slice(0, 40), round: 3, surveyorId, mandalId: booth.mandalId, constituencyId: booth.constituencyId, syncedAt: Date.now(), receivedBy: req.user.phone });
@@ -394,8 +418,10 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
     const role = req.body?.role && ROLE_LIST.includes(req.body.role) ? req.body.role : u.role;
     if (phone === req.user.phone && (!active || role !== 'admin')) return res.status(400).json({ error: 'You cannot remove your own admin access' });
     if (u.role === 'admin' && (!active || role !== 'admin') && db.prepare("SELECT COUNT(*) n FROM users WHERE role = 'admin' AND active = 1").get().n <= 1) return res.status(400).json({ error: 'At least one admin must remain' });
-    db.prepare('UPDATE users SET active = ?, role = ? WHERE phone = ?').run(active ? 1 : 0, role, phone);
-    audit(req.user.name, `${active ? 'Updated' : 'Switched off'} login: ${u.name} (${role})`);
+    const name = req.body?.name !== undefined ? String(req.body.name).trim().slice(0, 80) : u.name;
+    if (!name) return res.status(400).json({ error: 'Enter a name' });
+    db.prepare('UPDATE users SET active = ?, role = ?, name = ? WHERE phone = ?').run(active ? 1 : 0, role, name, phone);
+    audit(req.user.name, `${active ? 'Updated' : 'Switched off'} login: ${name} (${role})`);
     res.json(userRow(db.prepare('SELECT * FROM users WHERE phone = ?').get(phone)));
   });
 

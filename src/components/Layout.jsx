@@ -22,7 +22,7 @@ export const NAV = [
     { to: '/admin/builder', mod: 'admin.builder', label: 'Questionnaire', icon: FileEdit },
     { to: '/admin/booths', mod: 'admin.access', label: 'Booth list', icon: MapPinned, adminOnly: true },
     { to: '/admin/targets', mod: 'admin.targets', label: 'Booth targets', icon: Target },
-    { to: '/admin/team', mod: 'admin.team', label: 'Surveyors & team', icon: Users },
+    { to: '/admin/team', mod: 'admin.team', label: 'Team & people', icon: Users },
     { to: '/admin/access', mod: 'admin.access', label: 'Who can see what', icon: ShieldCheck },
   ] },
   { title: 'Fieldwork', items: [
