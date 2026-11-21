@@ -140,6 +140,8 @@ Windows Smart App Control blocks unsigned .exe tools; the zip must be made with 
   Free plan with $100 credit until 2027-05-18. AWS CLI profile: **`msr-pulse`**.
 - AWS CLI path: `%LOCALAPPDATA%\Programs\Amazon\AWSCLIV2\aws.exe` (not on PATH).
 - Sign-in expires after ~12 hours: run `aws login --profile msr-pulse --region ap-southeast-2`; the owner approves in the browser.
+- AWS Agent Toolkit is set up (2026-11-21): the `aws-mcp` server in ~/.claude.json uses profile msr-pulse (works only while that sign-in is valid).
+- Build quirk for AI tools: Claude Code sets NoDefaultCurrentDirectoryInExePath=1, which breaks the .bat scripts ('gradlew.bat not recognized'); run them with that variable removed.
 - CloudFormation stack **`msr-pulse`** (template `deploy/aws/msr-pulse-aws.yaml`):
   - EC2 **t3.small** `i-00f5b84673c49f226`, Elastic IP 13.210.51.39, Docker container `msr-app`, Caddy HTTPS
   - Site: **https://13-210-51-39.sslip.io** (free HTTPS name via sslip.io), protected by a site password
@@ -184,7 +186,7 @@ Dashboard actions; builder draft with Save/Publish/Discard and unsaved warning; 
 no GPS question; continuous question numbering in preview; plain-language skip-logic editor; delete page; honest version history;
 team add/edit with login handling.
 
-**Round 2026-11-20 (NOT yet deployed to the test site, APK not rebuilt):**
+**Round 2026-11-20 - deployed 2026-11-21:**
 - Git repository created (baseline commit = 2026-11-19 handoff state). Fixed `.gitignore` (`data/` also hid `src/data/`).
 - Real surveys now possible: booth list upload from Excel (Set up > Booth list, with checks and preview); question roles
   ("Used for" in the builder) used by quotas, targets, filters, fake-interview checks, privacy masking/reveal/retention,
@@ -196,7 +198,7 @@ team add/edit with login handling.
   (old 6-digit ids could collide and the server silently dropped the second interview).
 - One crashing screen no longer blanks the whole app (error boundary). Evening digest crash with a non-sample booth list fixed.
 
-**Round 2026-11-21 b (owner's reported problems, NOT yet deployed):**
+**Round 2026-11-21 b (owner's reported problems) - DEPLOYED 2026-11-21 04:45 UTC with the APK; all three rounds below are live:**
 - Survey teams: each survey has a per-survey setting `team` (null = everyone; else { members: { personId: { boothIds } } },
   empty boothIds = usual booths). Set on Team & people ("Team for this survey") or via the "Team" button on Surveys.
   Server: surveyors only see / load Live surveys they are on (`canSeeSurvey`); finished interviews are still accepted if
@@ -211,7 +213,7 @@ team add/edit with login handling.
   & client logins" with edit / switch off; logins can be renamed). Menu "Surveyors & team" is now "Team & people".
 - Tests: 36 (new server/test/teams.test.js).
 
-**Round 2026-11-21 (client-review polish, NOT yet deployed):**
+**Round 2026-11-21 (client-review polish) - deployed 2026-11-21:**
 - UI: dashboard "Needs your attention" list; alerts filter + "back-check all" per surveyor; over-quota shown purple "+n" on
   targets; clearer surveyor booth status (answer labels, not codes); long single-choice lists (>8) are a pick-list on phones;
   mobile-number question uses the phone keypad and checks 10 digits; client portal shows live fieldwork progress while the
@@ -235,7 +237,7 @@ team add/edit with login handling.
 
 ## 8. Remaining work (in order)
 
-0. **Ship the 2026-11-20 round:** rebuild the APK (phone screens changed), `make-release.bat`, deploy (ask the owner first).
+0. **Done 2026-11-21:** all rounds shipped (APK rebuilt, deployed). Testers: reload the site once and reinstall the APK.
    Add checklist rows for: booth list upload, "Used for" marks, offline interview then back online.
 1. **Testing week (now):** owner's friends test with `MSR-Pulse-Test-Checklist.xlsx`; fix reported bugs; redeploy.
 2. **Go live with an empty system:** remove sample data (`msr-go-live` / `SEED_SAMPLE=0`, `DEMO_MODE` off); remove the site password only after real SMS logins work.
