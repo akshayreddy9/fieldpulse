@@ -80,4 +80,4 @@ Constraints for each level:
 
 ## Project handoff
 
-At the start of a session read `HANDOFF.md` (project summary, AWS details, commands, status). Open other files only when the task needs them. Keep HANDOFF.md updated after notable changes.
+At the start of a session read `HANDOFF.md` (short summary). Open `docs/HANDOFF-FULL.md` or other files only when the task needs them. Keep HANDOFF.md updated after notable changes.
