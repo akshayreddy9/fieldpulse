@@ -204,10 +204,10 @@ export function generateInterviews(round = 3, surveyors = generateSurveyors()) {
         const bad = patterns.length && rnd() < 0.62;
         const p = (name) => bad && patterns.includes(name);
         let start = p('night') ? nightStart + k * 14 * 60000 : t;
-        let dur = Math.round(clamp(gauss(rnd, 15.5 * 60, 3.2 * 60), 8 * 60, 32 * 60));
-        if (p('short')) dur = Math.round(200 + rnd() * 160);
+        let dur = Math.round(clamp(gauss(rnd, 6.5 * 60, 1.2 * 60), 4 * 60, 10 * 60)); // MSR interviews take up to about 8 minutes
+        if (p('short')) dur = Math.round(80 + rnd() * 70);
         const gap = p('burst') ? 60 + rnd() * 90 : 6 * 60 + rnd() * 20 * 60;
-        if (p('burst')) dur = Math.round(260 + rnd() * 120);
+        if (p('burst')) dur = Math.round(200 + rnd() * 90);
         t = start + (dur + gap) * 1000;
         if (round === 3 && start > NOW) continue;
         const d = makeDemo(rnd, booth);
@@ -255,7 +255,7 @@ export function simulateInterview(seed, surveyors, opts = {}) {
   const answers = makeAnswers(rnd, 3, booth, d);
   const suspicious = rnd() < 0.22;
   const kind = suspicious ? pick(rnd, ['short', 'gps_far', 'straight', 'no_consent']) : null;
-  const dur = kind === 'short' ? Math.round(180 + rnd() * 120) : Math.round(clamp(gauss(rnd, 15 * 60, 3 * 60), 8 * 60, 30 * 60));
+  const dur = kind === 'short' ? Math.round(80 + rnd() * 70) : Math.round(clamp(gauss(rnd, 6.5 * 60, 1.2 * 60), 4 * 60, 10 * 60));
   if (kind === 'straight') Object.keys(answers.q_services).forEach((k) => { answers.q_services[k] = '4'; });
   const gps = kind === 'gps_far'
     ? { lat: booth.lat + 0.05 + rnd() * 0.03, lng: booth.lng + 0.04, acc: 9 }

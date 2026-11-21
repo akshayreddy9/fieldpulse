@@ -31,8 +31,8 @@ export const SAMPLE_QUESTIONNAIRE = {
   version: 7,
   languages: ['en', 'te'],
   consentScript: {
-    en: 'Namaste. I am from Micro Studies and Research. We are doing a survey on public issues. It will take about 15 minutes. Your answers are confidential and will be used only for research. This interview will be audio recorded for quality checks. Do you agree to take part?',
-    te: 'నమస్తే. నేను మైక్రో స్టడీస్ అండ్ రీసెర్చ్ నుండి వచ్చాను. ప్రజా సమస్యలపై సర్వే చేస్తున్నాము. సుమారు 15 నిమిషాలు పడుతుంది. మీ సమాధానాలు గోప్యంగా ఉంచబడతాయి, పరిశోధనకు మాత్రమే ఉపయోగిస్తాము. నాణ్యత తనిఖీ కోసం ఈ ఇంటర్వ్యూ రికార్డ్ చేయబడుతుంది. మీరు పాల్గొనడానికి అంగీకరిస్తారా?',
+    en: 'Namaste. I am from Micro Studies and Research. We are doing a survey on public issues. It will take about 8 minutes. Your answers are confidential and will be used only for research. This interview will be audio recorded for quality checks. Do you agree to take part?',
+    te: 'నమస్తే. నేను మైక్రో స్టడీస్ అండ్ రీసెర్చ్ నుండి వచ్చాను. ప్రజా సమస్యలపై సర్వే చేస్తున్నాము. సుమారు 8 నిమిషాలు పడుతుంది. మీ సమాధానాలు గోప్యంగా ఉంచబడతాయి, పరిశోధనకు మాత్రమే ఉపయోగిస్తాము. నాణ్యత తనిఖీ కోసం ఈ ఇంటర్వ్యూ రికార్డ్ చేయబడుతుంది. మీరు పాల్గొనడానికి అంగీకరిస్తారా?',
   },
   groups: [
     {

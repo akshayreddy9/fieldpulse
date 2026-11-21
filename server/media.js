@@ -11,7 +11,7 @@ import crypto from 'node:crypto';
 
 export const MEDIA_KINDS = { audio: ['audio/'], photo: ['image/'] };
 const EXT = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/mpeg': 'mp3', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
-export const MAX_MEDIA_BYTES = 30 * 1024 * 1024; // a 15-minute speech recording is ~3 MB; generous limit for long interviews
+export const MAX_MEDIA_BYTES = 30 * 1024 * 1024; // an 8-minute speech recording is ~1.5 MB; generous limit for unusually long interviews
 
 export function mediaStore(dbFile) {
   // Tests use an in-memory database: keep their files in a throwaway temp folder

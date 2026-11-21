@@ -104,7 +104,7 @@ function FieldAppInner({ mode = 'preview' }) {
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') { setRecMode('unavailable'); return; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Speech quality (~24 kbit/s): a 15-minute interview is about 3 MB instead of ~14 MB, saving phone storage and mobile data
+      // Speech quality (~24 kbit/s): an 8-minute interview is about 1.5 MB instead of ~7 MB, saving phone storage and mobile data
       const mime = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/webm', 'audio/mp4'].find((m) => MediaRecorder.isTypeSupported?.(m));
       const mr = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 24000 });
       chunks.current = [];
@@ -162,7 +162,7 @@ function FieldAppInner({ mode = 'preview' }) {
     const audioBlob = await stopRecording();
     // Demo switches only apply in demo mode. Real fieldwork always records the true time, location and consent.
     const realSecs = Math.max(1, Math.floor((Date.now() - startedAt) / 1000));
-    const dur = demo && realDuration && !app ? 840 + Math.floor(Math.random() * 300) : (demo && app ? Math.max(realSecs, 840 + Math.floor(Math.random() * 300)) : realSecs);
+    const dur = demo && realDuration && !app ? 360 + Math.floor(Math.random() * 120) : (demo && app ? Math.max(realSecs, 360 + Math.floor(Math.random() * 120)) : realSecs);
     const allQs = qn.groups.flatMap((g) => g.questions);
     const locQ = allQs.find((x) => x.type === 'cascade');
     const loc = BOOTH_BY_ID[locQ && ans[locQ.id]?.booth] || booth;
@@ -473,7 +473,7 @@ function FieldAppInner({ mode = 'preview' }) {
               {demo ? (<>
                 <div className="divider" style={{ margin: 0 }} />
                 <div className="tiny bold muted">TRY THE FAKE-INTERVIEW CHECKS</div>
-                <Toggle on={realDuration} onChange={setRealDuration} label="Count as a normal 15-minute interview" />
+                <Toggle on={realDuration} onChange={setRealDuration} label="Count as a normal 6-8 minute interview" />
                 <Toggle on={atHome} onChange={setAtHome} label="Surveyor is at home, 8 km away (GPS check)" />
                 <Toggle on={skipConsent} onChange={setSkipConsent} label="Consent line not read (AI checker)" />
                 <div className="callout blue small"><Info size={15} style={{ flexShrink: 0, marginTop: 2 }} /><div>Switch one on, submit an interview, then open <b>Fake-interview alerts</b>. It will be flagged with the exact reason.</div></div>

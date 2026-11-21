@@ -198,7 +198,9 @@ team add/edit with login handling.
   (old 6-digit ids could collide and the server silently dropped the second interview).
 - One crashing screen no longer blanks the whole app (error boundary). Evening digest crash with a non-sample booth list fixed.
 
-**Round 2026-11-21 d (recordings & photos) - BUILT and tested, NOT yet deployed (waiting for the owner's OK), app version 2026-11-21T06:01:**
+**Round 2026-11-21 d (recordings & photos) - DEPLOYED 2026-11-21 06:10 UTC, app version 2026-11-21T06:08:**
+- Interviews take at most ~8 minutes (owner): starter consent script says "about 8 minutes"; sample data median 6.5 min (max 10);
+  recordings ~1.5 MB each. Live test data still has the old ~15-min sample interviews (not reset). Consider the 4-min back-to-back rule.
 - Phone saves the recording (speech quality ~24 kbit/s, ~3 MB per 15 min) and photo in IndexedDB store `media` first, uploads them
   after the interview (POST /api/interviews/:id/media/audio|photo), removes them only when the server has them, retries offline.
 - Server stores files via server/media.js on the data disk (<db folder>/media; on AWS /srv/msr-data/media on the encrypted volume).
