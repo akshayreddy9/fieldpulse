@@ -1,0 +1,22 @@
+const puppeteer = require('C:/Users/akashreddy1/OneDrive/Desktop/MSR/tools/browser-test/node_modules/puppeteer-core');
+const B = 'http://localhost:8787';
+const OUT = __dirname + '/img/';
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const click = (p, sel, t) => p.evaluate((sel, t) => { const el = [...document.querySelectorAll(sel)].find((e) => e.innerText.trim().includes(t) && !e.disabled); if (el) el.click(); return !!el; }, sel, t);
+(async () => {
+  const id = process.argv[2];
+  const b = await puppeteer.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+  const p = await b.newPage();
+  await p.setViewport({ width: 1366, height: 800, deviceScaleFactor: 1.5 });
+  await p.goto(B + '/', { waitUntil: 'networkidle2' }); await wait(500);
+  await click(p, 'button', 'Try a demo account'); await wait(300); await click(p, '.role-choice', 'MSR Admin'); await wait(500); await click(p, 'button', 'Use demo code'); await wait(2500);
+  await p.goto(`${B}/#/live/alerts?id=${id}`, { waitUntil: 'networkidle2' }); await wait(3000);
+  console.log('header:', await p.evaluate(() => [...document.querySelectorAll('.bold')].map((e) => e.innerText).find((t) => t.startsWith('INT-SV'))));
+  await p.screenshot({ path: OUT + 'review-top.png' });
+  await click(p, 'button', 'Play recording'); await wait(2000);
+  await click(p, 'button', 'Show photo'); await wait(1500);
+  await p.evaluate(() => { const el = [...document.querySelectorAll('.tiny.bold.muted')].find((e) => e.innerText.includes('RECORDING')); el && el.scrollIntoView({ block: 'start' }); window.scrollBy(0, -120); });
+  await wait(800);
+  await p.screenshot({ path: OUT + 'review-media.png' });
+  await b.close();
+})();

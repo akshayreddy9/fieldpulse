@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AlertOctagon, PhoneCall, Filter, ShieldAlert, Users } from 'lucide-react';
 import { useStore } from '../../store.jsx';
@@ -15,6 +15,9 @@ export default function Alerts() {
   const [con, setCon] = useState('');
   const [sv, setSv] = useState('');
   const [sel, setSel] = useState(params.get('id') || null);
+  // A link to one interview (…/live/alerts?id=…) opens it, also when this screen is already open
+  const linkId = params.get('id');
+  useEffect(() => { if (linkId) setSel(linkId); }, [linkId]);
   const q = (i) => s.quality[i.id] || { score: 0, flags: [], risk: 'Clean' };
 
   const flaggedAll = useMemo(() => s.interviews.filter((i) => (s.quality[i.id]?.score || 0) >= FLAG_THRESHOLD || s.statuses[i.id]), [s.interviews, s.quality, s.statuses]);

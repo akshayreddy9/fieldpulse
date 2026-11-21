@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MSR Pulse - System Overview and Progress Report</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  :root { --navy: #0f2342; --teal: #0d9488; --ink: #1e293b; --muted: #64748b; --line: #e2e8f0; --soft: #f1f5f9; --green: #15803d; --amber: #b45309; --red: #be123c; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Inter, Arial, sans-serif; color: var(--ink); font-size: 10.4pt; line-height: 1.5; margin: 0; }
+  h1, h2, h3, h4 { color: var(--navy); line-height: 1.25; margin: 0; }
+  h2 { font-size: 19pt; margin: 0 0 4mm; padding-bottom: 2mm; border-bottom: 2.5px solid var(--teal); }
+  h3 { font-size: 13pt; margin: 6mm 0 2mm; }
+  h4 { font-size: 10.8pt; margin: 4mm 0 1.5mm; }
+  p { margin: 0 0 2.6mm; }
+  ul { margin: 0 0 3mm; padding-left: 5mm; }
+  li { margin-bottom: 1.2mm; }
+  .section { page-break-before: always; }
+  .lead { font-size: 11.2pt; color: #334155; }
+  .muted { color: var(--muted); }
+  .small { font-size: 9pt; }
+  b { color: #0b1a33; }
+
+  /* cover */
+  .cover { height: 257mm; display: flex; flex-direction: column; justify-content: space-between; background: linear-gradient(150deg, #0f2342 0%, #123a5a 55%, #0d9488 130%); color: #fff; padding: 22mm 18mm; border-radius: 4mm; }
+  .cover .brand { display: flex; align-items: center; gap: 4mm; }
+  .cover .mark { width: 15mm; height: 15mm; border-radius: 3.5mm; background: rgba(45,212,191,.18); border: 1px solid rgba(94,234,212,.5); display: grid; place-items: center; }
+  .cover h1 { color: #fff; font-size: 34pt; margin-top: 30mm; }
+  .cover h1 span { color: #5eead4; }
+  .cover .sub { font-size: 14pt; color: #cbd5e1; margin-top: 5mm; max-width: 150mm; }
+  .cover .meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; font-size: 9.5pt; }
+  .cover .meta div { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); border-radius: 2.5mm; padding: 3mm 4mm; }
+  .cover .meta b { color: #5eead4; display: block; font-size: 8.5pt; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 1mm; }
+
+  /* boxes, tables */
+  .box { border: 1px solid var(--line); border-radius: 2.5mm; padding: 3.5mm 4.5mm; margin: 3mm 0; background: #fff; }
+  .box.teal { background: #f0fdfa; border-color: #99f6e4; }
+  .box.amber { background: #fffbeb; border-color: #fcd34d; }
+  .box.blue { background: #eff6ff; border-color: #bfdbfe; }
+  .box h4 { margin-top: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; }
+  .kpi { border: 1px solid var(--line); border-radius: 2.5mm; padding: 3mm 4mm; background: var(--soft); }
+  .kpi .v { font-size: 18pt; font-weight: 800; color: var(--navy); }
+  .kpi .l { font-size: 8.8pt; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 9.3pt; page-break-inside: auto; }
+  th { background: var(--navy); color: #fff; text-align: left; padding: 2mm 2.5mm; font-weight: 600; }
+  td { padding: 1.8mm 2.5mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr { page-break-inside: avoid; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .tag { display: inline-block; font-size: 8pt; font-weight: 700; border-radius: 10px; padding: .4mm 2.2mm; white-space: nowrap; }
+  .done { background: #dcfce7; color: var(--green); }
+  .prev { background: #fef3c7; color: var(--amber); }
+  .plan { background: #e0e7ff; color: #3730a3; }
+  .part { background: #ccfbf1; color: #0f766e; }
+
+  /* figures */
+  figure { margin: 3mm 0 4mm; page-break-inside: avoid; }
+  figure img { width: 100%; border: 1px solid var(--line); border-radius: 2mm; display: block; }
+  figcaption { font-size: 8.6pt; color: var(--muted); margin-top: 1.4mm; }
+  .phones { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; align-items: start; }
+  .phones img { border-radius: 3mm; }
+  .feature { page-break-inside: avoid; }
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2.5mm; margin: 3mm 0; }
+  .step { border: 1px solid var(--line); border-radius: 2.5mm; padding: 3mm; background: var(--soft); font-size: 8.8pt; }
+  .step .n { font-weight: 800; color: var(--teal); font-size: 8pt; letter-spacing: .05em; }
+  .step b { display: block; font-size: 10pt; margin: .8mm 0; }
+  .toc li { margin-bottom: 1.6mm; }
+  .toc { columns: 2; column-gap: 10mm; padding-left: 5mm; }
+  .bar { height: 3mm; background: #e2e8f0; border-radius: 2mm; overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--teal); }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<div class="cover">
+  <div class="brand">
+    <div class="mark"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#5eead4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l3-8 4 16 3-8h6"/></svg></div>
+    <div><div style="font-size:16pt;font-weight:800">MSR Pulse</div><div style="color:#9fb2c9;font-size:10pt">Micro Studies and Research Organisation</div></div>
+  </div>
+  <div>
+    <h1>System overview &amp;<br><span>progress report</span></h1>
+    <div class="sub">What has been built, what each part is used for, how it was tested, and what comes next before going live.</div>
+  </div>
+  <div class="meta">
+    <div><b>Prepared for</b>Micro Studies and Research Organisation (MSR)</div>
+    <div><b>Date</b>21 November 2026</div>
+    <div><b>Stage</b>Test survey: ready for MSR's review</div>
+  </div>
+</div>
+
+<!-- ============ CONTENTS + SUMMARY ============ -->
+<div class="section">
+  <h2>Contents</h2>
+  <ol class="toc">
+    <li>Summary</li>
+    <li>How MSR Pulse works</li>
+    <li>Who uses it</li>
+    <li>Pulse Admin: setting up a survey</li>
+    <li>Pulse Field app: interviews on the phone</li>
+    <li>Pulse Live: checking quality during fieldwork</li>
+    <li>Pulse Insights: results and the client report</li>
+    <li>Client portal</li>
+    <li>Add-ons</li>
+    <li>Security, privacy and data protection (DPDP)</li>
+    <li>Requirement-by-requirement status</li>
+    <li>Work completed and how it was tested</li>
+    <li>Previews and work still to come</li>
+    <li>What MSR needs to provide</li>
+    <li>How to review the test site and give feedback</li>
+    <li>Glossary</li>
+  </ol>
+
+  <h2 style="margin-top:8mm">1. Summary</h2>
+  <p class="lead">MSR Pulse is one system that runs a whole survey from start to finish: building the questionnaire, collecting interviews in the field, checking quality while fieldwork is running, adding up the results, and producing the client report. It replaces the separate tools and manual Excel work MSR uses today.</p>
+  <div class="grid3" style="margin:4mm 0">
+    <div class="kpi"><div class="v">~73%</div><div class="l">of the whole project complete (software, security, go-live)</div></div>
+    <div class="kpi"><div class="v">~88%</div><div class="l">of the software features built and working</div></div>
+    <div class="kpi"><div class="v">41</div><div class="l">automated checks passing, plus browser and Android app tests</div></div>
+  </div>
+  <h4>Overall progress</h4>
+  <table>
+    <tr><th style="width:42%">Area</th><th style="width:12%">Weight</th><th>Progress</th><th style="width:10%">Done</th></tr>
+    <tr><td>Core features (questionnaire, field app, live checks, results)</td><td>45%</td><td><div class="bar"><span style="width:89%"></span></div></td><td><b>89%</b></td></tr>
+    <tr><td>Advanced features (totals, comparisons, AI report, client logins)</td><td>20%</td><td><div class="bar"><span style="width:86%"></span></div></td><td><b>86%</b></td></tr>
+    <tr><td>Optional add-ons</td><td>10%</td><td><div class="bar"><span style="width:54%"></span></div></td><td><b>54%</b></td></tr>
+    <tr><td>Security, privacy and ownership</td><td>15%</td><td><div class="bar"><span style="width:39%"></span></div></td><td><b>39%</b></td></tr>
+    <tr><td>Go-live readiness (MSR's AWS account, SMS, domain, app stores)</td><td>10%</td><td><div class="bar"><span style="width:42%"></span></div></td><td><b>42%</b></td></tr>
+  </table>
+  <div class="box blue">
+    <h4>Where things stand</h4>
+    <p style="margin:0">All five modules are built and working on a <b>private test site with made-up sample data</b>. MSR can now review it. The main remaining work is <b>moving to MSR's own AWS account in India (Mumbai)</b>, connecting a real SMS service for login codes, publishing the apps, and the independent security audit. These are listed in sections 13 and 14.</p>
+  </div>
+</div>
+
+<!-- ============ HOW IT WORKS ============ -->
+<div class="section">
+  <h2>2. How MSR Pulse works</h2>
+  <p>Every survey follows the same five steps. Everything is connected: an interview done on a surveyor's phone appears on the live map, in the quality checks, in the results and in the client report within seconds of reaching the server.</p>
+  <div class="steps">
+    <div class="step"><div class="n">STEP 1</div><b>Set up</b>Questionnaire in Telugu and English, booth list, booth targets, team.</div>
+    <div class="step"><div class="n">STEP 2</div><b>Interview</b>Phone app: consent, audio recording, GPS, photo. Works without internet.</div>
+    <div class="step"><div class="n">STEP 3</div><b>Check live</b>Live map, booth progress and fake-interview alerts while fieldwork runs.</div>
+    <div class="step"><div class="n">STEP 4</div><b>Results</b>Totals from booth up to state, comparisons, Excel export.</div>
+    <div class="step"><div class="n">STEP 5</div><b>Report</b>Automatic first draft, MSR adds its advice, PDF and client portal.</div>
+  </div>
+  <h3>The problems it solves (from MSR's requirements)</h3>
+  <table>
+    <tr><th style="width:45%">Today</th><th>With MSR Pulse</th></tr>
+    <tr><td>Questionnaires are built in GoSurvey, a separate tool.</td><td>The questionnaire builder is part of MSR Pulse: Telugu and English, all question types, skip logic, phone preview, versions.</td></tr>
+    <tr><td>Booth targets and fake interviews can only be checked after the data comes back, so extra back-check rounds are needed.</td><td>Quotas are tracked live per booth. Nine automatic checks score every interview the moment it arrives; supervisors review flagged interviews the same day and back-check only those.</td></tr>
+    <tr><td>Totals are merged by hand in Excel.</td><td>Totals add up automatically from booth to mandal, constituency and state, and export to Excel.</td></tr>
+    <tr><td>Every client report is written from scratch.</td><td>The system writes a first draft from the data (every number calculated, nothing invented). MSR adds its own advice, approves, and the client sees it in their portal or as a PDF.</td></tr>
+  </table>
+  <figure><img src="img/dashboard.png"><figcaption>The admin dashboard: survey progress, today's interviews, booths on track, flagged interviews, and a "Needs your attention" list of things to act on.</figcaption></figure>
+</div>
+
+<!-- ============ ROLES ============ -->
+<div class="section">
+  <h2>3. Who uses it</h2>
+  <p>Everyone signs in with their <b>mobile number and a 6-digit SMS code</b>. There are no passwords to remember. Each person only sees the screens their role needs, and an admin can adjust this on the "Who can see what" screen.</p>
+  <table>
+    <tr><th style="width:17%">Role</th><th style="width:22%">Who</th><th>What they can do</th></tr>
+    <tr><td><b>Admin</b></td><td>MSR management (a few people)</td><td>Everything: surveys, questionnaires, booth list, targets, teams, who can see what, quality review, results, reports, security settings.</td></tr>
+    <tr><td><b>Supervisor</b></td><td>Field supervisors</td><td>Live map, alerts and review of suspicious interviews, evening summary, booth targets, team, results. Can listen to recordings for quality checks.</td></tr>
+    <tr><td><b>Analyst</b></td><td>MSR analysts</td><td>Results, booth-to-state totals, comparisons, "Ask the data", the client report, the questionnaire builder.</td></tr>
+    <tr><td><b>Surveyor</b></td><td>Field staff (any number)</td><td>Phone app only: start an interview, read consent, ask questions, record, capture GPS and photo, send. Sees only their own work and the surveys they are assigned to.</td></tr>
+    <tr><td><b>Client</b></td><td>MSR's customers</td><td>Client portal only: their own surveys, fieldwork progress, key results, and the report once MSR approves it. Never sees personal details or recordings.</td></tr>
+  </table>
+  <div class="grid2">
+    <figure><img src="img/team-add.png"><figcaption>"Add person": surveyors, supervisors, analysts, admins and client logins are all added from one place.</figcaption></figure>
+    <figure><img src="img/access.png"><figcaption>"Who can see what": switch screens on or off for each role.</figcaption></figure>
+  </div>
+</div>
+
+<!-- ============ ADMIN ============ -->
+<div class="section">
+  <h2>4. Pulse Admin: setting up a survey</h2>
+
+  <div class="feature">
+    <h3>4.1 Surveys</h3>
+    <p>MSR can run <b>many surveys for many clients at the same time</b>. Each survey has its own questionnaire, targets, team, interviews, quality reviews and report. A survey moves from <b>Draft</b> (being prepared) to <b>Live</b> (fieldwork running) to <b>Closed</b>. Surveyors only see live surveys they are assigned to; clients only see their own surveys.</p>
+    <figure><img src="img/surveys.png"><figcaption>Surveys list: client, status, number of interviews, team size, and quick actions (edit questions, team, dashboard).</figcaption></figure>
+  </div>
+
+  <div class="feature">
+    <h3>4.2 Questionnaire builder (replaces GoSurvey)</h3>
+    <ul>
+      <li><b>Telugu and English together</b> for every question, answer and page title. Publishing is blocked until every Telugu text is filled in.</li>
+      <li><b>All question types</b> from the requirements: single choice and multiple choice (with "Other, please specify"), grids/rating tables, cascading lists (constituency → mandal → booth), text, number, date, GPS location and photo.</li>
+      <li><b>Pages and skip logic</b> written in plain words ("Ask this question only if the answer to … is …").</li>
+      <li><b>Live phone preview</b>: exactly what surveyors will see.</li>
+      <li><b>Draft, save and publish</b>: changes are a draft until "Publish to field"; phones receive the new version within seconds. Every interview keeps the version it was collected on.</li>
+      <li><b>"Used for" setting</b>: tells the system which question is Gender, Age, Caste, Respondent name or mobile (kept private), and the Main result. Booth quotas, privacy, totals and the report all work from this, so <b>any questionnaire works</b>, not only the sample one.</li>
+    </ul>
+    <figure><img src="img/builder.png"><figcaption>The questionnaire builder: pages and questions (left), the question being edited with its "Used for" setting (middle), and the live phone preview in Telugu and English (right).</figcaption></figure>
+  </div>
+
+  <div class="feature">
+    <h3>4.3 Booth list</h3>
+    <p>MSR's list of constituencies, mandals and polling booths, with each booth's location, is <b>uploaded from Excel</b> using a template. The upload is checked before anything is saved: missing values, repeated booths or locations outside India are listed with their Excel row number. The booth list feeds the location question, booth targets, surveyor assignments, the live map, the "away from booth" check and all totals.</p>
+    <figure><img src="img/booths.png"><figcaption>Booth list: download the template or the current list, upload a new list, see counts. The test site uses a sample list of 6 constituencies, 18 mandals and 72 booths.</figcaption></figure>
+  </div>
+
+  <div class="feature">
+    <h3>4.4 Booth targets (quotas)</h3>
+    <p>Each booth has a target number of interviews, split by <b>gender, age group and caste category</b> (the groups come from the questionnaire). Progress fills in live as interviews arrive. Colours show met (green), behind (amber/red) and <b>over quota</b> (purple with "+n"). Targets can be edited for one booth or a whole mandal, or exported and imported with Excel.</p>
+    <figure><img src="img/targets.png"><figcaption>Quotas by booth: achieved / target for each group.</figcaption></figure>
+  </div>
+
+  <div class="feature">
+    <h3>4.5 Team &amp; people, and survey teams</h3>
+    <ul>
+      <li>Upload surveyors and supervisors from <b>Excel</b> (with checks), or add them one by one. Each surveyor gets a login with their mobile number automatically.</li>
+      <li>Add <b>analysts, admins and client logins</b> from the same screen. Logins can be renamed or switched off.</li>
+      <li><b>Team for each survey</b>: choose "Everyone" or "Only selected people", and optionally give someone different booths for one survey. A surveyor can work on <b>several surveys at the same time</b>.</li>
+      <li>See each surveyor's interviews, average length and how many were flagged. <b>No limit</b> on the number of surveyors or phones.</li>
+    </ul>
+    <figure><img src="img/team.png"><figcaption>Team &amp; people: the team for the selected survey, booth assignments and each person's work record.</figcaption></figure>
+  </div>
+</div>
+
+<!-- ============ FIELD APP ============ -->
+<div class="section">
+  <h2>5. Pulse Field app: interviews on the phone</h2>
+  <p>Surveyors use the <b>MSR Pulse Android app</b> (on iPhone, the same app runs from the website and can be added to the home screen). It is built for field conditions:</p>
+  <ul>
+    <li><b>Works without internet.</b> Every interview, recording and photo is saved on the phone first and sent automatically when signal returns. It is removed from the phone only after the server confirms it has arrived, so closing the app or losing signal never loses an interview.</li>
+    <li><b>Consent first.</b> The consent statement is shown in Telugu and English to read aloud; recording starts before any question, and the interview cannot start without it.</li>
+    <li><b>Audio recording</b> of every interview, in speech quality (about 1.5 MB for an 8-minute interview), to save phone storage and mobile data.</li>
+    <li><b>GPS location and time</b> on every interview, from the phone's real GPS; a <b>photo</b> of the house or landmark (no faces).</li>
+    <li><b>Clear checks</b>: required answers, number ranges, 10-digit mobile numbers; the error appears at the top and scrolls to the question.</li>
+    <li><b>The surveyor's booth and what is still needed</b> ("Female: 3 more, Age 18-25: 6 more").</li>
+    <li><b>Several surveys</b>: the home screen lists every survey the surveyor is on; tap to switch, also offline.</li>
+    <li><b>Always up to date</b>: new questionnaire versions arrive automatically; if a newer app is available, the app says so with a Download button.</li>
+  </ul>
+  <div class="phones">
+    <figure><img src="img/phone-home.png"><figcaption>Home: today's work, the booth, what is still needed, and anything waiting to send.</figcaption></figure>
+    <figure><img src="img/phone-consent.png"><figcaption>Consent: read aloud in Telugu and English; recording is on (REC).</figcaption></figure>
+    <figure><img src="img/phone-questions.png"><figcaption>Questions in Telugu and English, with clear required fields.</figcaption></figure>
+  </div>
+  <div class="phones">
+    <figure><img src="img/phone-gps-photo.png"><figcaption>Last page: date, GPS location and photo.</figcaption></figure>
+    <figure><img src="img/phone-sent.png"><figcaption>Sent: the interview has reached MSR Pulse and been checked.</figcaption></figure>
+    <figure><img src="img/phone-admin.png"><figcaption>Office staff can also use MSR Pulse on a phone or tablet.</figcaption></figure>
+  </div>
+</div>
+
+<!-- ============ LIVE ============ -->
+<div class="section">
+  <h2>6. Pulse Live: checking quality during fieldwork</h2>
+  <div class="feature">
+    <h3>6.1 Live map and booth progress</h3>
+    <p>Every interview appears on the map within seconds, coloured by its quality status, with booth rings showing progress against target. Filter by constituency, today or all days.</p>
+    <figure><img src="img/livemap.png"><figcaption>Live map with interview points and booth progress.</figcaption></figure>
+  </div>
+  <div class="feature">
+    <h3>6.2 Fake-interview checks and alerts</h3>
+    <p>Each interview is scored from 0 to 100 by <b>nine automatic checks</b> the moment it arrives. A score of 40 or more puts it in "Alerts to review", with the exact reasons:</p>
+    <table>
+      <tr><th style="width:24%">Check</th><th>What it catches</th></tr>
+      <tr><td>Too short</td><td>Interview took under 45% of the typical length for this questionnaire.</td></tr>
+      <tr><td>Away from booth</td><td>GPS location more than 1.5 km from the assigned booth.</td></tr>
+      <tr><td>Duplicate answers</td><td>Same answers as another interview by the same surveyor.</td></tr>
+      <tr><td>Consent line not read</td><td>Consent statement not detected (from the recording checker add-on).</td></tr>
+      <tr><td>Back-to-back</td><td>Started less than 4 minutes after the surveyor's previous interview ended.</td></tr>
+      <tr><td>Same spot</td><td>Three or more interviews by one surveyor from the same place (within 20 m).</td></tr>
+      <tr><td>Straight-lining</td><td>Every row of a rating grid given the same answer.</td></tr>
+      <tr><td>Odd hours</td><td>Started before 7 AM or after 9 PM.</td></tr>
+      <tr><td>Weak GPS</td><td>GPS accuracy worse than 100 m.</td></tr>
+    </table>
+    <p>Supervisors <b>accept, send for back-check or reject</b> each flagged interview, with a note. Rejected interviews are removed from all results automatically. "Surveyors with repeated flags" shows patterns; one click shows only that surveyor's interviews with a "back-check all" button.</p>
+    <figure><img src="img/alerts.png"><figcaption>Alerts to review: flagged interviews with reasons (left) and the review panel (right).</figcaption></figure>
+  </div>
+  <div class="feature">
+    <h3>6.3 Listening to the recording and seeing the photo</h3>
+    <p>When reviewing an interview, the supervisor sees the surveyor, time, length, distance from the booth on a map, every answer, and can <b>play the real recording and view the photo</b> uploaded from the phone. Each time a recording or photo is opened, it is written in the privacy access log. Recordings and photos are kept for a period MSR chooses (section 10) and then deleted automatically.</p>
+    <div class="grid2">
+      <figure><img src="img/review-top.png"><figcaption>Interview review: reasons for the flag and the map of booth versus interview location.</figcaption></figure>
+      <figure><img src="img/review-media.png"><figcaption>The real recording playing and the photo (a test picture here), with "kept until" date; then Accept, Back-check or Reject.</figcaption></figure>
+    </div>
+  </div>
+  <div class="feature">
+    <h3>6.4 Evening summary</h3>
+    <p>Each evening's flagged interviews by constituency, with an Excel back-check list for supervisors, so back-checks focus only on suspicious interviews instead of random re-visits. <i>Automatic sending by SMS, WhatsApp or email is not connected yet (section 13); the list is downloaded and shared today.</i></p>
+    <figure><img src="img/digest.png"><figcaption>Evening summary and back-check list.</figcaption></figure>
+  </div>
+</div>
+
+<!-- ============ INSIGHTS ============ -->
+<div class="section">
+  <h2>7. Pulse Insights: results and the client report</h2>
+  <div class="feature">
+    <h3>7.1 Results for every question</h3>
+    <p>A chart and table for every question, with filters (constituency, mandal, gender, age, caste) and <b>Excel export</b> (summary and raw data; names and mobiles appear only as codes). Rejected interviews are excluded automatically.</p>
+    <figure><img src="img/results.png"><figcaption>Results with filters and Excel export.</figcaption></figure>
+  </div>
+  <div class="feature">
+    <h3>7.2 Totals from booth up to state</h3>
+    <p>Booth results <b>add up automatically</b> to mandal, constituency and state: no more merging Excel files by hand. Choose which question to total; export all levels to Excel.</p>
+    <figure><img src="img/rollup.png"><figcaption>Booth → mandal → constituency → state totals.</figcaption></figure>
+  </div>
+  <div class="feature">
+    <h3>7.3 Compare and trends</h3>
+    <p>Compare <b>any question with any other</b> (for example vote intention by gender or age group), and <b>this round with the previous round</b>, with PDF export.</p>
+    <figure><img src="img/compare.png"><figcaption>Cross-tabulation of two questions.</figcaption></figure>
+  </div>
+  <div class="feature">
+    <h3>7.4 Ask the data in plain English</h3>
+    <p>Type a question such as "Vote share among women by age group" and get a chart. Every answer shows how the question was understood, so it can be checked.</p>
+    <figure><img src="img/ask.png"><figcaption>"Ask the data": typed question, chart and one-line finding.</figcaption></figure>
+  </div>
+  <div class="feature">
+    <h3>7.5 Client report</h3>
+    <p>The system writes a <b>first draft from the live data</b>: executive summary, method and sample, main result, concerns, ratings and constituency snapshots. <b>Every number is calculated from the interviews; nothing is invented.</b> Analysts edit any paragraph; the <b>"MSR strategic advice"</b> section is written only by MSR, and the report cannot be approved without it. Then: MSR review → Approved → Sent to client (portal and branded PDF). An AI writing service (Claude) can polish the wording using totals only, never personal data; it will be switched on with MSR's agreement.</p>
+    <figure><img src="img/report.png"><figcaption>Report studio: draft sections, approval steps and history.</figcaption></figure>
+  </div>
+</div>
+
+<!-- ============ CLIENT PORTAL ============ -->
+<div class="section">
+  <h2>8. Client portal</h2>
+  <p>MSR's clients sign in with their own mobile number and see <b>only their own surveys</b>: fieldwork progress while the survey runs, key results, and the report once MSR has approved and sent it (with PDF download). Respondents' personal details and recordings are never visible to clients.</p>
+  <figure><img src="img/client-report.png"><figcaption>What a client sees: their approved report, ready to download as PDF.</figcaption></figure>
+  <figure><img src="img/client-results.png"><figcaption>Key results tab in the client portal.</figcaption></figure>
+</div>
+
+<!-- ============ ADD-ONS ============ -->
+<div class="section">
+  <h2>9. Add-ons</h2>
+  <table>
+    <tr><th style="width:24%">Add-on</th><th style="width:14%">Status</th><th>What it does</th></tr>
+    <tr><td><b>Extra privacy lock</b></td><td><span class="tag done">Working</span></td><td>Names and phone numbers are replaced by codes everywhere (screens, exports, reports). Seeing a real value needs a reason, shows for 30 seconds, and every look is recorded permanently in the access log.</td></tr>
+    <tr><td><b>Connect to other software</b></td><td><span class="tag done">Working</span></td><td>A secure link (API keys with chosen permissions, revocable any time) so other systems can pull results. Personal details are never included. Automatic "push" notifications (webhooks) are a preview.</td></tr>
+    <tr><td><b>AI interview checker</b></td><td><span class="tag prev">Preview</span></td><td>Will turn recordings into Telugu and English text, check the consent line was read, and flag suspicious recordings. Real recordings are now uploaded, so this can be built next; the screen today shows how it will work with simulated transcripts.</td></tr>
+    <tr><td><b>Bring in old GoSurvey data</b></td><td><span class="tag prev">Preview</span></td><td>Will move recent GoSurvey surveys into MSR Pulse for comparison. The screen shows the steps; it will be finished once MSR shares a real GoSurvey export.</td></tr>
+  </table>
+  <div class="grid2">
+    <figure><img src="img/privacy.png"><figcaption>Privacy lock and access log.</figcaption></figure>
+    <figure><img src="img/api.png"><figcaption>Connect to other software: API keys and safeguards.</figcaption></figure>
+  </div>
+  <figure><img src="img/checker.png"><figcaption>Recording checker: clearly labelled "Preview · not connected yet".</figcaption></figure>
+</div>
+
+<!-- ============ SECURITY ============ -->
+<div class="section">
+  <h2>10. Security, privacy and data protection (DPDP)</h2>
+  <p>The system is designed for India's Digital Personal Data Protection Act. The "Security, privacy &amp; DPDP" screen shows each item honestly as <b>In place</b> or <b>Before go-live</b>.</p>
+  <table>
+    <tr><th style="width:30%">Protection</th><th style="width:14%">Status</th><th>How</th></tr>
+    <tr><td>Consent recorded for every respondent</td><td><span class="tag done">In place</span></td><td>Consent read aloud and recorded before any question; the server refuses interviews without consent; refusals end the interview.</td></tr>
+    <tr><td>Data minimisation and privacy lock</td><td><span class="tag done">In place</span></td><td>Only the personal details marked in the questionnaire are collected; they are hidden by codes; every reveal needs a reason and is logged.</td></tr>
+    <tr><td>Who can see what</td><td><span class="tag done">In place</span></td><td>Role-based access checked on the server (not only on screen). Clients and surveyors can never open recordings or other people's data.</td></tr>
+    <tr><td>Encryption on the server</td><td><span class="tag done">In place</span></td><td>Encrypted disk and nightly encrypted backups with an encryption key owned by MSR (AWS KMS); HTTPS for all traffic.</td></tr>
+    <tr><td>Scheduled deletion of personal details</td><td><span class="tag done">In place</span></td><td>Names and mobile numbers erased automatically after the retention period the admin chooses (90, 180 or 365 days); answers are kept anonymously for analysis.</td></tr>
+    <tr><td>Recordings and photos storage period</td><td><span class="tag done">In place</span></td><td>Admin chooses 30, 60, 90, 180 or 365 days; deleted automatically afterwards, except interviews still under review, which keep their evidence until a reviewer decides. Storage used and free space are shown.</td></tr>
+    <tr><td>Audit trail</td><td><span class="tag done">In place</span></td><td>Every important action (publishing, approvals, logins added, data deleted, recordings opened) is recorded with who and when.</td></tr>
+    <tr><td>Encryption on phones</td><td><span class="tag plan">Before go-live</span></td><td>Interviews waiting on the phone will be encrypted on the device itself.</td></tr>
+    <tr><td>Data kept in India, in MSR's own account</td><td><span class="tag plan">Before go-live</span></td><td>The test site runs in a temporary AWS account with sample data only. Real data will be kept only in MSR's own AWS account in Mumbai.</td></tr>
+    <tr><td>Independent security audit</td><td><span class="tag plan">Before go-live</span></td><td>By a CERT-In empanelled auditor before launch, then every year.</td></tr>
+  </table>
+  <figure><img src="img/compliance.png"><figcaption>Security, privacy &amp; DPDP screen: honest status for each item, deletion rules, and the recordings &amp; photos storage period.</figcaption></figure>
+  <h3>Ownership</h3>
+  <p>MSR owns everything: its data, questionnaires, reports and the system itself. The full source code is kept with complete version history and will be handed over to MSR. MSR's data, questionnaires, reports and name are never reused or shown without permission.</p>
+</div>
+
+<!-- ============ REQUIREMENTS ============ -->
+<div class="section">
+  <h2>11. Requirement-by-requirement status</h2>
+  <p class="small muted"><span class="tag done">Done</span> working on the test site · <span class="tag part">Partly</span> working, with a part still to come · <span class="tag prev">Preview</span> shown, not connected yet · <span class="tag plan">Planned</span> scheduled before go-live</p>
+  <table>
+    <tr><th style="width:15%">Module</th><th>Requirement</th><th style="width:24%">Status</th></tr>
+    <tr><td rowspan="5">Pulse Admin</td><td>Questionnaires in Telugu and English</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td>Single and multiple choice with "Other", grids, cascading lists, text, number, date, GPS and photo</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td>Groups and pages, skip logic and a preview</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td>Targets for each booth by gender, age and caste category</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td>Surveyor upload from Excel, and control over who sees what</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td rowspan="2">Pulse Field app</td><td>App for Android and iPhone that works without internet</td><td><span class="tag part">Partly</span><br><span class="small muted">Android app done; iPhone via website (App Store app planned)</span></td></tr>
+    <tr><td>Every interview recorded with consent, GPS and time</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td rowspan="2">Pulse Live</td><td>Live map of interviews and progress for each booth</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td>Fake-interview alerts and a review screen; alerts the same evening</td><td><span class="tag part">Partly</span><br><span class="small muted">Alerts within seconds; automatic evening SMS/email planned</span></td></tr>
+    <tr><td rowspan="6">Pulse Insights</td><td>Results for every question with Excel export</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td>Totals added up automatically from booth to mandal, constituency and state</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td>Compare any question with any other, and with the last round, with PDF export</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td>First draft of the client report, which MSR finishes with its own advice</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td>Ask questions about the data in plain English and get a chart back</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td>Logins for MSR's clients to see their own results</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td rowspan="4">Add-ons</td><td>Extra privacy lock</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td>AI interview checker</td><td><span class="tag prev">Preview</span></td></tr>
+    <tr><td>Bring in old GoSurvey data</td><td><span class="tag prev">Preview</span></td></tr>
+    <tr><td>Connect to other software</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td rowspan="6">Security &amp; ownership</td><td>DPDP: consent recorded, data encrypted, personal details deleted on schedule</td><td><span class="tag part">Partly</span><br><span class="small muted">Phone encryption planned</span></td></tr>
+    <tr><td>Runs in MSR's own Amazon account, all data kept in India</td><td><span class="tag plan">Planned</span></td></tr>
+    <tr><td>Independent security audit, team training and handover</td><td><span class="tag plan">Planned</span></td></tr>
+    <tr><td>MSR owns everything; source code handed over</td><td><span class="tag part">Ready</span><br><span class="small muted">Code kept with full history for handover</span></td></tr>
+    <tr><td>No limit on the number of surveyors or phones</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td>MSR's data and name never reused without permission</td><td><span class="tag done">Done</span></td></tr>
+  </table>
+  <h3>Delivery milestones</h3>
+  <table>
+    <tr><th style="width:28%">Milestone</th><th>What can be checked</th><th style="width:16%">Status</th></tr>
+    <tr><td>Agreement signed</td><td>Scope and requirements agreed</td><td><span class="tag done">Done</span></td></tr>
+    <tr><td>Test survey (about 8 weeks)</td><td>A survey of MSR's choice set up and tested on Android and iPhone</td><td><span class="tag part">In progress</span><br><span class="small muted">This review</span></td></tr>
+    <tr><td>First live survey</td><td>The first real survey runs live and its results are ready</td><td><span class="tag plan">Next</span></td></tr>
+    <tr><td>Handover (about 4 months)</td><td>Security audit passed, team trained, everything handed over including source code</td><td><span class="tag plan">Later</span></td></tr>
+  </table>
+</div>
+
+<!-- ============ WORK DONE ============ -->
+<div class="section">
+  <h2>12. Work completed and how it was tested</h2>
+  <h3>Main pieces of work</h3>
+  <table>
+    <tr><th style="width:24%">Area</th><th>What was done</th></tr>
+    <tr><td>All five modules</td><td>Questionnaire builder, field app, live checks, results and reports built end to end; five roles with their own screens; many surveys and clients at once.</td></tr>
+    <tr><td>Hosting (test site)</td><td>Running on Amazon Web Services with HTTPS, an encrypted disk, encrypted nightly backups, automatic installation of new versions, and access only through AWS's secure management service (no open server login). Protected by a test-site password.</td></tr>
+    <tr><td>Android app</td><td>Connects to the server automatically, asks for the test-site password once, shows its version, and tells users when a newer app is available.</td></tr>
+    <tr><td>Real booth lists and any questionnaire</td><td>Booth list upload from Excel; "Used for" settings so quotas, quality checks, totals, privacy and the report work with any questionnaire MSR builds.</td></tr>
+    <tr><td>Safe offline work</td><td>Interviews, recordings and photos are kept in the phone's database until the server confirms them; automatic retry; unique interview numbers across all phones.</td></tr>
+    <tr><td>Survey teams</td><td>Team and booths per survey; surveyors' phones follow survey changes immediately; several surveys at once, also offline.</td></tr>
+    <tr><td>Recordings and photos</td><td>Uploaded from phones, playable by reviewers, every opening logged, storage period chosen by MSR, automatic deletion.</td></tr>
+    <tr><td>Accurate reports</td><td>Every sentence of the automatic report draft is calculated from the data; simulated features are clearly labelled "Preview" so nothing is mistaken for a working feature.</td></tr>
+    <tr><td>8-minute interviews</td><td>Consent wording, sample data and recording sizes set for interviews of up to about 8 minutes.</td></tr>
+  </table>
+  <h3>Testing</h3>
+  <ul>
+    <li><b>41 automated checks</b> run before every release (a release is refused if any fails): sign-in, who can see what, surveys and clients kept apart, survey teams, booth lists, privacy masking and reveal, recordings and photos access and deletion, report accuracy.</li>
+    <li><b>Browser tests</b> that open every screen as every role (admin, supervisor, analyst, client, surveyor) and walk through real tasks: building and publishing a questionnaire, starting fieldwork, full interviews, offline interviews that are sent when signal returns, playing recordings, approving and sending a report.</li>
+    <li><b>The real Android app</b> tested on an Android 15 device emulator: first-time setup, live survey updates, update notice, maps and menus.</li>
+    <li>A <b>68-item manual checklist</b> for testers, and a test week with testers in different places.</li>
+  </ul>
+</div>
+
+<!-- ============ PREVIEWS / NEXT ============ -->
+<div class="section">
+  <h2>13. Previews and work still to come</h2>
+  <p>So that nothing is mistaken for a finished feature, these are clearly labelled in the system:</p>
+  <table>
+    <tr><th style="width:32%">Item</th><th>Today</th></tr>
+    <tr><td>Speech-to-text checking of recordings (AI interview checker)</td><td>Preview with simulated transcripts. Real recordings are now collected, so this can be built next.</td></tr>
+    <tr><td>Import of old GoSurvey data</td><td>Preview; loads sample data. Built once MSR shares a real export.</td></tr>
+    <tr><td>Automatic evening summary by SMS / WhatsApp / email</td><td>The summary and Excel back-check list work; automatic sending is not connected yet.</td></tr>
+    <tr><td>SMS login codes</td><td>The test site uses a fixed demo code; a real Indian (DLT-registered) SMS service is connected at go-live.</td></tr>
+    <tr><td>iPhone App Store app</td><td>iPhone users use the website (it can be added to the home screen and works offline).</td></tr>
+    <tr><td>Sample data</td><td>All names, booths and interviews on the test site are made up. No real respondent data is stored.</td></tr>
+  </table>
+  <h3>Next steps, in order</h3>
+  <ol>
+    <li><b>MSR review</b> of the test site and feedback (section 15); fixes.</li>
+    <li><b>Move to MSR's own AWS account in Mumbai</b>, including encrypted storage for recordings and photos with backups.</li>
+    <li><b>Real SMS login codes</b> through a DLT-registered SMS provider, and a proper web address (domain) for MSR Pulse.</li>
+    <li>Load <b>MSR's real booth list</b> and set up the <b>test survey of MSR's choice</b>.</li>
+    <li><b>Evening summary sent automatically</b> to supervisors.</li>
+    <li><b>Speed for very large surveys</b> (totals calculated on the server for tens of thousands of interviews).</li>
+    <li><b>Encryption on the phone</b>, the <b>Google Play</b> listing, and the <b>iPhone App Store</b> app.</li>
+    <li>Optional add-ons: <b>AI interview checker</b> and <b>GoSurvey import</b>.</li>
+    <li><b>Security audit</b>, team training and handover with source code.</li>
+  </ol>
+</div>
+
+<!-- ============ MSR NEEDS ============ -->
+<div class="section">
+  <h2>14. What MSR needs to provide</h2>
+  <table>
+    <tr><th style="width:32%">Item</th><th>Why it is needed</th></tr>
+    <tr><td><b>Amazon Web Services (AWS) account in MSR's name</b></td><td>So the system and all data run in MSR's own account in India (Mumbai region). MSR keeps full ownership and control.</td></tr>
+    <tr><td><b>SMS service for login codes</b></td><td>A DLT-registered Indian SMS provider, required for sending login codes to Indian mobile numbers.</td></tr>
+    <tr><td><b>Web address (domain)</b></td><td>For example pulse.msr…, instead of the temporary test address.</td></tr>
+    <tr><td><b>Google Play developer account</b></td><td>To publish the Android app under MSR's name.</td></tr>
+    <tr><td><b>Apple developer account</b></td><td>To publish the iPhone app in the App Store.</td></tr>
+    <tr><td><b>Booth list (Excel)</b></td><td>MSR's real constituencies, mandals and polling booths with locations, using the template in the system.</td></tr>
+    <tr><td><b>Test survey choice and questionnaire</b></td><td>The survey MSR wants to use for the test survey milestone.</td></tr>
+    <tr><td><b>Team list</b></td><td>Surveyors and supervisors (name, mobile, booths) and office staff who need logins.</td></tr>
+    <tr><td><b>Security auditor</b></td><td>A CERT-In empanelled auditor, before launch and then yearly.</td></tr>
+    <tr><td><b>A GoSurvey export</b> (optional)</td><td>Only if MSR wants old surveys brought in for comparison.</td></tr>
+  </table>
+</div>
+
+<!-- ============ HOW TO REVIEW ============ -->
+<div class="section">
+  <h2>15. How to review the test site and give feedback</h2>
+  <div class="box teal">
+    <h4>Signing in</h4>
+    <p>Test site: <b>https://13-210-51-39.sslip.io</b> (the test-site password is shared separately).<br>
+    Tap "Try a demo account" and pick a role. The demo sign-in code is <b>482913</b>.<br>
+    Android: open the site on the phone, sign in and tap "Download Android app", then enter the test-site password once in the app.</p>
+  </div>
+  <h3>Suggested things to try (about 30 minutes)</h3>
+  <ol>
+    <li><b>Admin</b>: create a new survey, add a few questions in Telugu and English with skip logic, preview and publish, start fieldwork.</li>
+    <li><b>Team &amp; people</b>: add yourself as a surveyor (your mobile number) and put yourself on the survey's team.</li>
+    <li><b>Phone</b>: do an interview (consent, recording, GPS, photo). Then switch on airplane mode, do another, and switch it off again: it is sent by itself.</li>
+    <li><b>Laptop at the same time</b>: see the interview on the live map; open it, play the recording and see the photo.</li>
+    <li>Do a <b>very short interview</b> and see it appear in "Alerts to review" with the reason.</li>
+    <li><b>Results</b>, <b>Booth → state totals</b>, <b>Compare</b>, <b>Ask the data</b>; export to Excel.</li>
+    <li><b>Client report</b>: write the first draft, add MSR advice, approve and send; then sign in as the <b>Client</b> and see it.</li>
+    <li><b>Security &amp; DPDP</b>: storage periods and the privacy access log.</li>
+  </ol>
+  <h3>Please send feedback as a numbered list in three groups</h3>
+  <div class="grid3">
+    <div class="box" style="border-color:#fecaca;background:#fef2f2"><h4 style="color:#be123c">A. Not working / wrong</h4><p class="small" style="margin:0">Anything that does not work as expected. Please mention the screen, what you did, and the phone model if relevant.</p></div>
+    <div class="box amber"><h4 style="color:#b45309">B. Change before go-live</h4><p class="small" style="margin:0">Changes or additions MSR needs before the first live survey.</p></div>
+    <div class="box blue"><h4 style="color:#1d4ed8">C. Nice to have later</h4><p class="small" style="margin:0">Ideas for later versions. New features are scoped separately.</p></div>
+  </div>
+  <div class="box amber">
+    <h4>Please note</h4>
+    <p style="margin:0">The test site contains <b>made-up sample data only</b>. Please do not enter real respondents' names or phone numbers; real data will be kept only in MSR's own AWS account in India after the move.</p>
+  </div>
+</div>
+
+<!-- ============ GLOSSARY ============ -->
+<div class="section">
+  <h2>16. Glossary</h2>
+  <table>
+    <tr><th style="width:26%">Term</th><th>Meaning</th></tr>
+    <tr><td>AWS (Amazon Web Services)</td><td>Amazon's cloud service where MSR Pulse runs. MSR's own account will hold all data in India.</td></tr>
+    <tr><td>Back-check</td><td>Re-contacting a respondent to confirm an interview really happened.</td></tr>
+    <tr><td>Booth list / booth master</td><td>MSR's list of constituencies, mandals and polling booths with their locations.</td></tr>
+    <tr><td>Booth target / quota</td><td>How many interviews are needed at a booth, by gender, age group and caste category.</td></tr>
+    <tr><td>Cascading list</td><td>A question where each list depends on the previous choice (constituency → mandal → booth).</td></tr>
+    <tr><td>DPDP Act</td><td>India's Digital Personal Data Protection Act, 2023.</td></tr>
+    <tr><td>DLT registration</td><td>The Indian registration required to send SMS messages (such as login codes) to Indian mobile numbers.</td></tr>
+    <tr><td>Encryption / KMS key</td><td>Data is stored scrambled; only MSR's own key (held in AWS Key Management Service) can unlock it.</td></tr>
+    <tr><td>Flagged interview</td><td>An interview whose quality score is 40 or more, waiting for a supervisor's decision.</td></tr>
+    <tr><td>Offline</td><td>Working without internet; the app saves everything and sends it later.</td></tr>
+    <tr><td>Privacy lock</td><td>Shows names and mobile numbers as codes; revealing one needs a reason and is logged.</td></tr>
+    <tr><td>Roll-up / totals</td><td>Booth results added up to mandal, constituency and state automatically.</td></tr>
+    <tr><td>Skip logic</td><td>Asking a question only when an earlier answer makes it relevant.</td></tr>
+    <tr><td>Storage period</td><td>How long recordings, photos and personal details are kept before automatic deletion.</td></tr>
+    <tr><td>"Used for"</td><td>A setting on a question that tells MSR Pulse what the question is (for example Gender or Main result), so quotas, totals and reports work with any questionnaire.</td></tr>
+  </table>
+  <p class="muted small" style="margin-top:8mm">MSR Pulse · System overview and progress report · 21 November 2026. Screens shown are from the test site with made-up sample data.</p>
+</div>
+
+</body>
+</html>

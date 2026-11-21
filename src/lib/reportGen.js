@@ -93,10 +93,11 @@ export function generateReport(qn, cur, prev, quality, statuses) {
   }
   const drivers = [];
   if (wA !== undefined && mA !== undefined && Math.abs(wA - mA) >= 3) drivers.push(`${lead.label} does ${wA > mA ? 'better' : 'worse'} among women (${fmtPct(wA)}) than men (${fmtPct(mA)})`);
-  if (benA !== undefined && nonA !== undefined && Math.abs(benA - nonA) >= 3) drivers.push(`${benA > nonA ? 'better' : 'worse'} among “${yes.en}” respondents to “${short(schemeQ)}” (${fmtPct(benA)} vs ${fmtPct(nonA)})`);
-  if (drivers.length) summary.push(`${drivers.join(', and ')}.`);
+  // Each finding is a full sentence on its own, so it reads correctly whichever ones apply
+  if (benA !== undefined && nonA !== undefined && Math.abs(benA - nonA) >= 3) drivers.push(`${lead.label} does ${benA > nonA ? 'better' : 'worse'} among respondents who answered “${yes.en}” to “${short(schemeQ)}” (${fmtPct(benA)}, against ${fmtPct(nonA)} among the rest)`);
+  drivers.forEach((d) => summary.push(`${d}.`));
   if (issues.length >= 2) summary.push(`${issues[0].label} and ${issues[1].label.toLowerCase()} are the most-mentioned concerns.`);
-  if (snapshots.length) summary.push(`${close.length} of ${snapshots.length} constituencies are within a 5-point margin.`);
+  if (snapshots.length) summary.push(close.length ? `${close.length} of ${snapshots.length} constituencies ${close.length === 1 ? 'is' : 'are'} within a 5-point margin.` : `No constituency is within a 5-point margin.`);
   sections.push({ id: 'summary', title: 'Executive summary', source: 'ai', body: summary.join(' ') || `${cur.length.toLocaleString('en-IN')} interviews have been collected. Mark a “Main result” question in the questionnaire builder to get a written summary.` });
 
   const quotas = [r.gender && 'gender', r.age && 'age group', r.caste && 'caste category'].filter(Boolean);

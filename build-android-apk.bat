@@ -37,6 +37,10 @@ call gradlew.bat assembleDebug || (cd .. & pause & exit /b 1)
 cd ..
 copy /y "android\app\build\outputs\apk\debug\app-debug.apk" "MSR-Pulse.apk" >nul
 node -e "require('fs').writeFileSync('MSR-Pulse.apk.json', JSON.stringify({ build: process.env.VITE_APP_BUILD }))"
+rem Put back a normal website build in dist\ (the app build above has the server address inside, which breaks a local test server)
+set "VITE_API_BASE="
+set "VITE_APP_BUILD="
+call npx vite build >nul
 echo.
 echo  Done: MSR-Pulse.apk
 echo  Copy it to an Android phone (WhatsApp, USB or Google Drive), open it and allow "Install unknown apps".
