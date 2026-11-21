@@ -8,7 +8,6 @@ Last updated: **2026-11-21** · Full detail (code map, AWS, history, commands): 
 - Deliverables made:
   - `docs/MSR-Pulse-System-Overview.pdf` (34-page client guide);
   - `MSR-Pulse-Test-Checklist-v2.xlsx` (105 tests).
-- Owner decision pending: what to do with the AWS test site (keep, stop or delete) and whether to reuse the product (see "Reuse ideas").
 
 ## Rules (owner)
 - The owner is new to AWS (help level HIGH): explain every step in plain language first.
@@ -29,17 +28,14 @@ Survey platform for field opinion polls (Telangana).
 
 **Stack:** React 18 + Vite, Node 24 Express + node:sqlite, SSE, Capacitor 7 Android, AWS EC2 + Docker + Caddy.
 
-## AWS (still running, costs money)
-- **Account:** profile `msr-pulse`, Region ap-southeast-2. CloudFormation stack `msr-pulse`.
-  - EC2 t3.small `i-00f5b84673c49f226`, Elastic IP 13.210.51.39.
-  - S3 bucket `msr-pulse-bucket-mzalppajffls`, KMS key, SSM `/msr-pulse/env/*`.
-- **Site:** https://13-210-51-39.sslip.io (password-gated).
-- **Cost:** about $20–25/month, paid from the free-plan credit ($100, until 2027-05-18).
-- **Sign-in:** `"$LOCALAPPDATA/Programs/Amazon/AWSCLIV2/aws.exe" login --profile msr-pulse --region ap-southeast-2` (the owner approves in the browser).
-- **Options for the owner:**
-  - Stop the EC2 instance: compute cost stops, but you still pay about $3.6/month for the Elastic IP plus a little for the disk.
-  - Delete the stack: everything goes, and the code stays on the PC. Empty the S3 bucket first.
-  - Keep the site as a portfolio demo.
+## AWS: ALL DELETED (2026-11-21)
+- Stack  deleted, and the retained disk, S3 bucket and SSM password were deleted by hand. The KMS key is scheduled for deletion on 2026-11-28. The test site is gone.
+- Nothing billable is left in ap-southeast-2 or us-east-1. To bring it back: deploy  again (see docs/DEPLOY-AWS.md); the database starts fresh.
+- Sign-in, if needed: .
+
+## GitHub
+- Public repo: https://github.com/akshayreddy9/fieldpulse (branch main only; commit email = GitHub noreply). The README brands it "FieldPulse"; the app screens still say MSR Pulse (owner: don't rename and no licence for now).
+- Old local branches (app-connect-fixes, client-overview-pdf, real-survey-fixes, recordings-photos) still carry the owner's Gmail address. Don't push them.
 
 ## Ship a change (only if work resumes)
 1. `npm test`
