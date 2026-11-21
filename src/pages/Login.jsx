@@ -1,7 +1,28 @@
 import React, { useRef, useState } from 'react';
 import { ShieldCheck, Smartphone, ArrowRight, MessageSquareText, UserCog, Radar, LineChart, Building2, Footprints, Server, Download } from 'lucide-react';
 import { useStore, ROLES } from '../store.jsx';
-import { API_BASE, connectServer, forgetServer } from '../lib/api.js';
+import { AppUpdateBanner, AppVersionLine, isNativeApp } from '../components/AppVersion.jsx';
+import { API_BASE, connectServer, forgetServer, getStageKey } from '../lib/api.js';
+
+// Android/iPhone app on a private test site: ask once for the test-site password (browsers use the site's own password page)
+function StagePassword() {
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true); setErr('');
+    try { await connectServer(API_BASE, pw); window.location.reload(); } catch (e) { setErr(e.message); setBusy(false); }
+  };
+  return (
+    <div className="card" style={{ padding: 16, boxShadow: 'none', marginBottom: 16 }}>
+      <div className="bold">Test-site password</div>
+      <div className="small muted mt8">This app is connected to the private MSR Pulse test site ({API_BASE.replace('https://', '').replace('http://', '')}). Enter the password you were given. You only need to do this once.</div>
+      <input className="input mt12" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Test-site password" autoFocus onKeyDown={(e) => e.key === 'Enter' && pw && go()} />
+      {err && <div className="small mt8" style={{ color: 'var(--red)' }}>{err}</div>}
+      <button className="btn teal block mt12" disabled={busy || !pw} onClick={go}>{busy ? 'Checking…' : 'Continue'}</button>
+    </div>
+  );
+}
 
 function ServerLink({ serverMode }) {
   const [open, setOpen] = useState(false);
@@ -125,8 +146,14 @@ export default function Login() {
 
       <div className="login-form">
         <div className="box">
-          {stage === 'pick' && (
+          {stage === 'pick' && isNativeApp() && serverMode && server?.stage && !server?.offline && !getStageKey() && <StagePassword />}
+          {stage === 'pick' && !(isNativeApp() && serverMode && server?.stage && !server?.offline && !getStageKey()) && (
             <>
+              {isNativeApp() && !serverMode && (
+                <div className="callout red" style={{ marginBottom: 16 }}>
+                  <div><b>Not connected to an MSR Pulse server.</b> This app is only showing made-up demo data, and nothing you do here is sent to MSR. Tap “Connect to an MSR Pulse server” below, or ask your supervisor for the address.</div>
+                </div>
+              )}
               {server?.unreachable && (
                 <div className="callout amber" style={{ marginBottom: 16 }}>
                   <div>
@@ -173,6 +200,8 @@ export default function Login() {
                 </div>
               )}
               <ServerLink serverMode={serverMode} />
+              <AppUpdateBanner />
+              <AppVersionLine />
               {server?.apk && !window.Capacitor && /Android/i.test(navigator.userAgent) && (
                 <a className="btn block mt12" href={`${API_BASE}/download/MSR-Pulse.apk`} style={{ borderColor: '#86efac', color: '#15803d' }}><Download size={15} />Download the Android app</a>
               )}

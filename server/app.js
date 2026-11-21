@@ -40,7 +40,8 @@ export function createApp({ dbFile = process.env.DB_FILE || path.join(here, '..'
   app.use(express.json({ limit: '8mb' }));
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Referrer-Policy', 'same-origin');
+    // Other sites only learn the site name, never the page (OpenStreetMap blocks map tiles requested without it)
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     // API answers must never come from a phone's cache (e.g. an old survey list after a survey was changed)
     if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
@@ -190,7 +191,9 @@ ${req.query.wrong ? '<div class="err">That password is not right.</div>' : ''}<b
   setInterval(() => clients.forEach((c) => c.res.write(': ping\n\n')), 25000).unref();
 
   // ---------- public ----------
-  app.get('/api/health', (req, res) => res.json({ ok: true, mode: 'server', ai: aiEnabled(), demo: demoMode(), apk: fs.existsSync(APK), stage: !!STAGE, sample: getKv(db, 'installMode') !== 'production', interviews: db.prepare('SELECT COUNT(*) n FROM interviews WHERE round = 3').get().n }));
+  // Build stamp of the Android app this server offers (so older apps can tell users to update)
+  const apkBuild = () => { try { return JSON.parse(fs.readFileSync(`${APK}.json`, 'utf8')).build || null; } catch { return null; } };
+  app.get('/api/health', (req, res) => res.json({ ok: true, mode: 'server', ai: aiEnabled(), demo: demoMode(), apk: fs.existsSync(APK), apkBuild: apkBuild(), stage: !!STAGE, sample: getKv(db, 'installMode') !== 'production', interviews: db.prepare('SELECT COUNT(*) n FROM interviews WHERE round = 3').get().n }));
 
   app.post('/api/auth/otp', async (req, res) => {
     try {

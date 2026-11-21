@@ -118,7 +118,7 @@ export default function InterviewReview({ interview: i, showTranscript = true })
 
       <div style={{ height: 190, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--line)' }}>
         <MapContainer key={i.id} bounds={[[booth.lat, booth.lng], [i.gps.lat, i.gps.lng]]} boundsOptions={{ padding: [40, 40], maxZoom: 15 }} style={{ height: '100%' }} scrollWheelZoom={false}>
-          <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" referrerPolicy="strict-origin-when-cross-origin" />
           <Circle center={[booth.lat, booth.lng]} radius={1500} pathOptions={{ color: '#0d9488', weight: 1, fillOpacity: 0.06 }} />
           <CircleMarker center={[booth.lat, booth.lng]} radius={8} pathOptions={{ color: '#0d9488', fillColor: '#fff', fillOpacity: 1, weight: 3 }}><Tooltip permanent direction="top">{booth.short}</Tooltip></CircleMarker>
           <Polyline positions={[[booth.lat, booth.lng], [i.gps.lat, i.gps.lng]]} pathOptions={{ color: q.distanceKm > 1.5 ? '#e11d48' : '#94a3b8', dashArray: '4 6' }} />

@@ -19,6 +19,14 @@ if not exist "%ANDROID_HOME%" (
 > android\local.properties echo sdk.dir=%ANDROID_HOME:\=\\%
 if not exist node_modules call npm install
 
+rem Server the app connects to (built into the app, so surveyors never type an address).
+rem Change this line when MSR Pulse moves to MSR's own AWS account / domain. Set MSR_SERVER=none to build an app that asks.
+if not defined MSR_SERVER set "MSR_SERVER=https://13-210-51-39.sslip.io"
+if /i not "%MSR_SERVER%"=="none" set "VITE_API_BASE=%MSR_SERVER%"
+echo Server built into the app: %MSR_SERVER%
+rem Version stamp (build time, UTC): baked into the app and saved next to the APK, so older apps can show "update available"
+for /f "delims=" %%i in ('node -e "process.stdout.write(new Date().toISOString().slice(0,16))"') do set "VITE_APP_BUILD=%%i"
+echo App version %VITE_APP_BUILD%
 echo Building the app...
 call npx vite build || (pause & exit /b 1)
 call npx cap sync android || (pause & exit /b 1)
@@ -28,6 +36,7 @@ cd android
 call gradlew.bat assembleDebug || (cd .. & pause & exit /b 1)
 cd ..
 copy /y "android\app\build\outputs\apk\debug\app-debug.apk" "MSR-Pulse.apk" >nul
+node -e "require('fs').writeFileSync('MSR-Pulse.apk.json', JSON.stringify({ build: process.env.VITE_APP_BUILD }))"
 echo.
 echo  Done: MSR-Pulse.apk
 echo  Copy it to an Android phone (WhatsApp, USB or Google Drive), open it and allow "Install unknown apps".

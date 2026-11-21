@@ -7,6 +7,7 @@ dist
 android/app/build/
 android/.gradle/
 MSR-Pulse.apk
+MSR-Pulse.apk.json
 test-site-password.txt
 msr-pulse-release.zip
 android/build/

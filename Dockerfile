@@ -6,7 +6,7 @@ RUN npm ci
 COPY . .
 RUN npm run build && npm prune --omit=dev
 # The Android app (if included in the release) is offered for download on the login page
-RUN mkdir -p /out && if [ -f MSR-Pulse.apk ]; then cp MSR-Pulse.apk /out/; fi
+RUN mkdir -p /out && if [ -f MSR-Pulse.apk ]; then cp MSR-Pulse.apk /out/; fi && if [ -f MSR-Pulse.apk.json ]; then cp MSR-Pulse.apk.json /out/; fi
 
 FROM node:24-alpine
 WORKDIR /app

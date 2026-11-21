@@ -53,7 +53,7 @@ export default function LiveMap() {
         </>}>
           <div style={{ height: 520 }}>
             <MapContainer center={STATE.center} zoom={7} style={{ height: '100%' }} preferCanvas scrollWheelZoom>
-              <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" referrerPolicy="strict-origin-when-cross-origin" />
               <Fit con={con} />
               {layer !== 'booth' && shown.map((i) => {
                 const st = s.statusOf(i.id);

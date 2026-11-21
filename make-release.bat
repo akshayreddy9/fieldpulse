@@ -16,6 +16,7 @@ rem Windows' own tar (bsdtar) creates a real ZIP; other "tar" programs on PATH m
 set "FILES=package.json package-lock.json Dockerfile .dockerignore index.html vite.config.js server src public deploy"
 rem Include the Android app so phones can download it from the login page
 if exist MSR-Pulse.apk set "FILES=%FILES% MSR-Pulse.apk"
+if exist MSR-Pulse.apk.json set "FILES=%FILES% MSR-Pulse.apk.json"
 "%SystemRoot%\System32\tar.exe" -a -c -f msr-pulse-release.zip %FILES%
 if errorlevel 1 (echo Could not create the zip. & pause & exit /b 1)
 echo.

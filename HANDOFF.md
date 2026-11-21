@@ -198,6 +198,17 @@ team add/edit with login handling.
   (old 6-digit ids could collide and the server silently dropped the second interview).
 - One crashing screen no longer blanks the whole app (error boundary). Evening digest crash with a non-sample booth list fixed.
 
+**Round 2026-11-21 c (owner's test report) - DEPLOYED 2026-11-21 05:27 UTC, app version 2026-11-21T05:26:**
+- Root cause of "survey changes not reaching the Android app": the app had no server address built in; without one it silently ran
+  in standalone demo mode (fake local data). Now build-android-apk.bat builds the address in (MSR_SERVER, default the test site;
+  change it when moving to MSR's account), the app asks once for the test-site password, and an unconnected app shows a red warning.
+- App version: each APK is stamped (VITE_APP_BUILD) and MSR-Pulse.apk.json is shipped beside it; /api/health returns apkBuild; older
+  apps show "A newer version of the app is available · Download". The version is shown on the app's sign-in screen.
+- Map "Access blocked": OpenStreetMap blocks tiles without a referrer; server Referrer-Policy is now strict-origin-when-cross-origin and
+  tile layers set referrerPolicy. Map no longer draws over the phone menu (.leaflet-container isolation).
+- Verified on a real Android 15 emulator (MSR_Pixel AVD in AndroidBuild) via WebView debugging: password prompt, live survey
+  add/close, update banner, map tiles, menu. For production at scale use a map provider that allows it (e.g. Amazon Location Service).
+
 **Round 2026-11-21 b (owner's reported problems) - DEPLOYED 2026-11-21 04:45 UTC with the APK; all three rounds below are live:**
 - Survey teams: each survey has a per-survey setting `team` (null = everyone; else { members: { personId: { boothIds } } },
   empty boothIds = usual booths). Set on Team & people ("Team for this survey") or via the "Team" button on Surveys.

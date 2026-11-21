@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { AppUpdateBanner } from './AppVersion.jsx';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FileEdit, Target, Users, ShieldCheck, Smartphone, Map, AlertOctagon, MoonStar, BarChart3, Network,
@@ -160,6 +161,7 @@ export default function Layout({ children }) {
           {isAdmin && <button className="btn ghost icon sm hide-sm" title="Reset to the sample survey" onClick={() => window.confirm(s.serverMode ? 'Reset ALL data on the server back to the sample survey? This affects every user.' : 'Reset all demo changes?') && s.reset()}><RotateCcw size={15} /></button>}
           <button className="btn ghost icon sm menu-btn" title="Sign out" onClick={signOut}><LogOut size={16} /></button>
         </header>
+        <AppUpdateBanner />
         <main className="content">{s.serverMode && !s.surveyId && !NO_SURVEY_OK.includes(loc.pathname) ? <NoSurvey /> : children}</main>
       </div>
       <Toasts />
@@ -183,6 +185,7 @@ export function SurveyorShell({ children }) {
         <span className={`net-pill ${s.deviceOnline ? '' : 'off'}`}>{s.deviceOnline ? <Wifi size={12} /> : <WifiOff size={12} />}{s.deviceOnline ? 'Online' : 'Offline'}</span>
         <button className="btn icon sm" title="Sign out" onClick={() => { if (!s.outbox.length || window.confirm(`${s.outbox.length} interview(s) are still waiting to send. They stay saved on this phone. Sign out anyway?`)) { s.logout(); nav('/'); } }}><LogOut size={16} /></button>
       </header>
+      <AppUpdateBanner />
       <div className="shell-body">{children}</div>
       <Toasts />
     </div>
