@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Plug, KeyRound, Plus, Copy, Webhook, Trash2, ShieldCheck } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useStore } from '../../store.jsx';
 import { PageHead, Card, Badge, Modal } from '../../components/ui.jsx';
 import { mainQuestionId } from '../../lib/reportGen.js';
@@ -8,7 +7,6 @@ import { findQuestion } from '../../data/questionnaire.js';
 import { GEO } from '../../data/geo.js';
 
 const SCOPES = ['results:read', 'interviews:read', 'reports:read', 'rollup:read'];
-const usage = ['12', '13', '14', '15', '16', '17', '18'].map((d, k) => ({ d: `${d} Nov`, calls: [120, 340, 410, 380, 520, 610, 450][k] }));
 
 export default function Api() {
   const s = useStore();
@@ -28,7 +26,7 @@ export default function Api() {
   };
   return (
     <div>
-      <PageHead eyebrow="Add-ons" icon={Plug} title="Connect to other software" desc="A secure link so other systems (dashboards, the client’s BI tools) can pull results. Each key has limited permissions, can be revoked at any time, and every call is logged.">
+      <PageHead eyebrow="Add-ons" icon={Plug} title="Connect to other software" desc="A secure link so other systems (dashboards, the client’s BI tools) can pull results. Each key has limited permissions, can be revoked at any time, and its last use is recorded.">
         <button className="btn primary" onClick={() => setOpen(true)}><Plus size={15} />New API key</button>
       </PageHead>
       {newKey && <div className="callout teal" style={{ marginBottom: 16 }}><KeyRound size={16} style={{ flexShrink: 0 }} /><div style={{ flex: 1 }}>New key created. Copy it now; it will not be shown again.<div className="mono mt8">{newKey}</div></div><button className="btn sm" onClick={() => { navigator.clipboard?.writeText(newKey); s.toast('Copied', 'success'); }}><Copy size={13} />Copy</button></div>}
@@ -62,17 +60,18 @@ export default function Api() {
           </Card>
         </div>
         <div className="stack">
-          <Card title="Calls this week">
-            <div style={{ height: 160 }}>
-              <ResponsiveContainer><BarChart data={usage} margin={{ left: -20, right: 0, top: 6 }}><XAxis dataKey="d" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip /><Bar dataKey="calls" fill="#4f46e5" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>
+          <Card title="Keys in use" sub="When each active key was last used">
+            <div className="stack small" style={{ gap: 6 }}>
+              {s.apiKeys.filter((k) => k.status === 'Active').map((k) => <div key={k.id} className="row"><b>{k.name}</b><div className="spacer" /><span className="muted">{k.lastUsed && k.lastUsed !== '—' ? `last used ${k.lastUsed}` : 'not used yet'}</span></div>)}
+              {!s.apiKeys.some((k) => k.status === 'Active') && <div className="muted">No active keys.</div>}
             </div>
           </Card>
-          <Card title={<span className="row"><Webhook size={16} />Webhooks</span>} sub="Push events to other systems">
+          <Card title={<span className="row"><Webhook size={16} />Webhooks</span>} sub="Preview: pushing events to other systems is not active yet">
             {s.webhooks.map((w) => <div key={w.id} className="small"><div className="mono">{w.url}</div><div className="row mt8">{w.events.map((e) => <Badge key={e} tone="teal">{e}</Badge>)}<Badge tone="green">{w.status}</Badge></div></div>)}
           </Card>
           <Card title={<span className="row"><ShieldCheck size={16} />Safeguards</span>}>
             <div className="stack small" style={{ gap: 6 }}>
-              <div>• Personal details are never returned by the API</div><div>• Keys limited by permission and IP address</div><div>• Rate limits and full call log</div><div>• Hosted in India, TLS 1.3 only</div>
+              <div>• Personal details are never returned by the API</div><div>• Each key only has the permissions chosen when it was made</div><div>• Keys are stored only as a fingerprint and can be switched off instantly</div><div>• HTTPS only; key creation and revocation are in the audit log</div>
             </div>
           </Card>
         </div>

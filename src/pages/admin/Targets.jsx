@@ -10,10 +10,16 @@ import { Link } from 'react-router-dom';
 
 const GROUP_LABEL = { gender: 'Gender', age: 'Age group', caste: 'Caste category' };
 
+// Green = quota met exactly; purple + "+" = over quota (too many of this group skews the sample); amber/red = behind
 function Cell({ done = 0, target = 0 }) {
   const pct = target ? done / target : 1;
-  const color = pct >= 1 ? '#15803d' : pct >= 0.6 ? '#334155' : pct >= 0.35 ? '#b45309' : '#be123c';
-  return <td className="num" style={{ color, fontWeight: 600 }}>{done}<span className="faint" style={{ fontWeight: 400 }}>/{target}</span></td>;
+  const over = target > 0 && done > target;
+  const color = over ? '#7c3aed' : pct >= 1 ? '#15803d' : pct >= 0.6 ? '#334155' : pct >= 0.35 ? '#b45309' : '#be123c';
+  return (
+    <td className="num" style={{ color, fontWeight: 600 }} title={over ? `${done - target} over quota` : undefined}>
+      {done}<span className="faint" style={{ fontWeight: 400 }}>/{target}</span>{over && <sup style={{ fontSize: 9, marginLeft: 1 }}>+{done - target}</sup>}
+    </td>
+  );
 }
 
 export default function Targets() {
@@ -87,7 +93,7 @@ export default function Targets() {
         <Stat label="Booths" value={GEO.booths.length} hint={`${GEO.constituencies.length} constituencies · ${GEO.mandals.length} mandals`} tone="blue" />
         <Stat label="Booths below 50%" value={totals.behind} tone="red" hint="Need attention today" />
       </div>
-      <Card title="Quotas by booth" sub="Achieved / target. Green = quota met, amber = behind, red = far behind."
+      <Card title="Quotas by booth" sub="Achieved / target. Green = quota met, purple + = over quota, amber = behind, red = far behind."
         right={<select className="select" style={{ width: 200 }} value={con} onChange={(e) => setCon(e.target.value)}><option value="">All constituencies</option>{GEO.constituencies.map((c) => <option key={c.id} value={c.id}>{c.name.en}</option>)}</select>} flush>
         <div className="table-wrap" style={{ maxHeight: 620 }}>
           <table className="t">

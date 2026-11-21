@@ -14,7 +14,7 @@ export default function Team() {
   const [editErr, setEditErr] = useState('');
   const nextId = (list, k = 0) => `SV-${String(list.reduce((m, x) => Math.max(m, Number(String(x.id).replace(/\D/g, '')) || 0), 0) + k + 1).padStart(3, '0')}`;
   const digits = (p) => String(p || '').replace(/\D/g, '').slice(-10);
-  const openNew = () => { setEditErr(''); setEdit({ isNew: true, name: '', phone: '', gender: 'Female', role: 'Surveyor', constituencyId: GEO.constituencies[0].id, boothIds: [], device: 'Android', status: 'Active' }); };
+  const openNew = () => { setEditErr(''); setEdit({ isNew: true, name: '', phone: '', gender: 'Female', role: 'Surveyor', constituencyId: GEO.constituencies[0]?.id || '', boothIds: [], device: 'Android', status: 'Active' }); };
   const openEdit = (x) => { setEditErr(''); setEdit({ ...x, phone: digits(x.phone), boothIds: [...(x.boothIds || [])] }); };
   const saveEdit = () => {
     const e = edit;
@@ -101,7 +101,7 @@ export default function Team() {
                     <td><div className="row nowrap"><div className="avatar" style={{ width: 28, height: 28, fontSize: 11 }}>{initials(x.name)}</div><div><div className="bold">{x.name}</div><div className="tiny muted">{x.id} · {x.phone}</div></div></div></td>
                     <td><Badge tone={x.role === 'Supervisor' ? 'indigo' : ''}>{x.role}</Badge></td>
                     <td>{CONST_BY_ID[x.constituencyId]?.name.en || '—'}</td>
-                    <td className="small">{x.boothIds.map((b) => BOOTH_BY_ID[b]?.short || b).join(', ') || '—'}</td>
+                    <td className="small">{x.boothIds.map((b) => BOOTH_BY_ID[b]?.short || b).join(', ') || '—'}{x.boothIds.some((b) => !BOOTH_BY_ID[b]) && <span className="badge red" style={{ marginLeft: 6 }} title="This booth is not in the current booth list. Correct it so the surveyor can work.">not in booth list</span>}</td>
                     <td className="small">{x.device}</td>
                     <td className="num">{st.n || '—'}</td>
                     <td className="num">{st.n ? (st.dur / st.n / 60).toFixed(1) : '—'}</td>

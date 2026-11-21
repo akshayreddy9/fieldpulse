@@ -35,6 +35,6 @@ export const STATE_RULES = {
 
 // What each role may read from shared state
 export const READABLE = {
-  client: ['questionnaire', 'report', 'reportStatus', 'privacyLock', 'round1Imported', 'permissions', 'geo'],
+  client: ['questionnaire', 'report', 'reportStatus', 'privacyLock', 'round1Imported', 'permissions', 'geo', 'targets'],
   surveyor: ['questionnaire', 'publishedVersion', 'targets', 'surveyors', 'permissions', 'privacyLock', 'geo'],
 };

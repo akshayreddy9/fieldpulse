@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { DatabaseZap, Upload, FileSpreadsheet, ArrowRight, CheckCircle2, AlertTriangle, Loader2, Link2 } from 'lucide-react';
 import { useStore } from '../../store.jsx';
-import { PageHead, Card, Badge, Progress } from '../../components/ui.jsx';
+import { PageHead, Card, Badge, Progress, PreviewNote } from '../../components/ui.jsx';
 import { readSheet } from '../../lib/exporters.js';
 
 const MAPPING = [
@@ -42,6 +42,7 @@ export default function Import() {
   return (
     <div>
       <PageHead eyebrow="Add-ons" icon={DatabaseZap} title="Bring in old GoSurvey data" desc="Move recent surveys of MSR’s choice from GoSurvey into MSR Pulse, so they can be compared with new rounds. Questions are matched automatically and checked before anything is imported." />
+      <PreviewNote>This shows how a GoSurvey import will work. The column matching and checks are an example, and finishing the import loads <b>generated sample data</b> as an earlier round, not the rows of the file you choose. The real import is built once MSR shares an actual GoSurvey export.</PreviewNote>
       <div className="row" style={{ marginBottom: 16, gap: 6 }}>
         {['Choose file', 'Match questions', 'Check data', 'Import', 'Done'].map((x, k) => (
           <React.Fragment key={x}><Badge tone={k < step ? 'green' : k === step ? 'navy' : ''}>{k + 1}. {x}</Badge>{k < 4 && <ArrowRight size={13} className="faint" />}</React.Fragment>
@@ -52,7 +53,7 @@ export default function Import() {
           <div className="empty">
             <FileSpreadsheet size={36} className="faint" />
             <div className="bold mt8">Upload a GoSurvey export (Excel or CSV)</div>
-            <div className="small muted mt8">Or use the sample Round 1 export from May 2026</div>
+            <div className="small muted mt8">Or try it with a sample GoSurvey export</div>
             <div className="row mt16" style={{ justifyContent: 'center' }}>
               <label className="btn primary" style={{ cursor: 'pointer' }}><Upload size={15} />Choose file<input type="file" hidden accept=".xlsx,.xls,.csv" onChange={(e) => e.target.files[0] && pick(e.target.files[0])} /></label>
               <button className="btn" onClick={() => pick(null)}>Use sample GoSurvey export</button>
@@ -84,8 +85,8 @@ export default function Import() {
         <Card>
           <div className="empty">
             <CheckCircle2 size={40} color="#16a34a" />
-            <div className="bold mt8" style={{ fontSize: 16 }}>Round 1 (May 2026) is in MSR Pulse</div>
-            <div className="small muted mt8">{s.round1.length.toLocaleString('en-IN')} interviews now appear in Compare & trends and in the client’s past surveys.</div>
+            <div className="bold mt8" style={{ fontSize: 16 }}>Sample earlier round loaded</div>
+            <div className="small muted mt8">{s.round1.length.toLocaleString('en-IN')} sample interviews now appear in Compare & trends as an earlier round.</div>
             <div className="row mt16" style={{ justifyContent: 'center' }}>
               <a className="btn primary" href="#/insights/compare">Open trends</a>
               <button className="btn" onClick={() => { s.setRound1(false).catch((e) => s.toast(e.message, 'error')); setStep(0); }}>Undo import</button>

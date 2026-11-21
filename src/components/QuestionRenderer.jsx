@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Check, MapPin, Camera, Loader2 } from 'lucide-react';
 import { GEO, MANDAL_BY_ID, BOOTH_BY_ID } from '../data/geo.js';
+import { R } from '../lib/roles.js';
 
 // Questions and answers are shown in Telugu and English together.
 // Everything else on screen (buttons, hints, errors) is English.
@@ -63,6 +64,19 @@ export default function QuestionRenderer({ q, value, onChange, other, onOther, a
     };
     const all = [...opts, ...(q.allowOther ? [{ v: 'OTHER', en: 'Other (please specify)', te: 'ఇతర' }] : [])];
     const isOn = (v) => (multi ? cur.includes(v) : cur === v);
+    // Long single-choice lists (e.g. occupation) are a compact pick-list on the phone instead of a very long page
+    if (!multi && all.length > 8) {
+      return (
+        <div className="fa-card">
+          {header}
+          <select className="select" style={{ height: 50, fontSize: 15 }} value={cur || ''} onChange={(e) => onChange(e.target.value || undefined)}>
+            <option value="">Choose an answer… / ఎంచుకోండి</option>
+            {all.map((o) => <option key={o.v} value={o.v}>{o.te ? `${o.te} · ${o.en}` : o.en}</option>)}
+          </select>
+          {isOn('OTHER') && <input className="input mt8" placeholder="Please specify" value={other || ''} onChange={(e) => onOther && onOther(e.target.value)} />}
+        </div>
+      );
+    }
     return (
       <div className="fa-card">
         {header}
@@ -176,12 +190,14 @@ export default function QuestionRenderer({ q, value, onChange, other, onOther, a
     );
   }
 
-  const inputType = q.type === 'number' ? 'number' : q.type === 'date' ? 'date' : 'text';
+  const phone = isPhoneQuestion(q);
+  const inputType = q.type === 'number' ? 'number' : q.type === 'date' ? 'date' : phone ? 'tel' : 'text';
   return (
     <div className="fa-card">
       {header}
-      <input className="input" style={{ height: 46, fontSize: 16 }} type={inputType} inputMode={q.type === 'number' ? 'numeric' : q.inputMode} min={q.min} max={q.max}
-        placeholder={q.type === 'number' ? `${q.min ?? ''}${q.max !== undefined ? ` – ${q.max}` : ''}` : 'Type the answer'}
+      <input className="input" style={{ height: 46, fontSize: 16 }} type={inputType} inputMode={q.type === 'number' ? 'numeric' : phone ? 'tel' : q.inputMode} min={q.min} max={q.max}
+        maxLength={phone ? 14 : undefined} autoComplete="off"
+        placeholder={q.type === 'number' ? `${q.min ?? ''}${q.max !== undefined ? ` – ${q.max}` : ''}` : phone ? '10-digit mobile number' : 'Type the answer'}
         value={value ?? ''} onChange={(e) => onChange(q.type === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)} />
     </div>
   );
@@ -193,5 +209,11 @@ export function validateAnswer(q, v) {
   if (q.type === 'grid') return q.required && Object.keys(v || {}).length < q.rows.length ? 'Answer every row' : null;
   if (q.required && empty) return 'This question is required';
   if (q.type === 'number' && !empty && ((q.min !== undefined && v < q.min) || (q.max !== undefined && v > q.max))) return `Enter a number between ${q.min} and ${q.max}`;
+  if (isPhoneQuestion(q) && !empty && !/^[6-9]\d{9}$/.test(String(v).replace(/\D/g, '').replace(/^(91|0)(?=\d{10}$)/, ''))) return 'Enter a valid 10-digit mobile number (or leave it empty if optional)';
   return null;
+}
+
+// The respondent-mobile question: marked "Respondent mobile" in the builder, or set to the phone keypad
+function isPhoneQuestion(q) {
+  return q.type === 'text' && (q.inputMode === 'tel' || q.role === 'phone' || R('phone') === q.id);
 }

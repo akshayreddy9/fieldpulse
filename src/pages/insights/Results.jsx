@@ -66,7 +66,7 @@ export default function Results() {
   const shownQs = g === 'all' ? qs : groups.find((x) => x.id === g).questions;
   return (
     <div>
-      <PageHead eyebrow="Results & reports" icon={BarChart3} title="Results for every question" desc={`Based on ${list.length.toLocaleString('en-IN')} accepted interviews (rejected interviews are excluded automatically). Filter by area or group; switch EN / తె at the top to see results in Telugu.`}>
+      <PageHead eyebrow="Results & reports" icon={BarChart3} title="Results for every question" desc={`Based on ${list.length.toLocaleString('en-IN')} accepted interviews (rejected interviews are excluded automatically). Filter by area or group. Each question shows its Telugu and English wording.`}>
         <button className="btn primary" onClick={() => { exportResultsExcel(s.questionnaire, list, { privacy: s.privacyLock }); s.log('Exported results to Excel'); }}><Download size={15} />Export to Excel</button>
       </PageHead>
       <Card className="no-print" style={{ marginBottom: 16 }}><Filters f={f} setF={setF} /></Card>

@@ -196,6 +196,17 @@ team add/edit with login handling.
   (old 6-digit ids could collide and the server silently dropped the second interview).
 - One crashing screen no longer blanks the whole app (error boundary). Evening digest crash with a non-sample booth list fixed.
 
+**Round 2026-11-21 (client-review polish, NOT yet deployed):**
+- UI: dashboard "Needs your attention" list; alerts filter + "back-check all" per surveyor; over-quota shown purple "+n" on
+  targets; clearer surveyor booth status (answer labels, not codes); long single-choice lists (>8) are a pick-list on phones;
+  mobile-number question uses the phone keypad and checks 10 digits; client portal shows live fieldwork progress while the
+  report is prepared (clients may now read booth targets); removed stale "EN/తె switch" and "Round 3" texts.
+- Honesty for client review: simulated features carry a "Preview · not connected yet" note (recording checker, GoSurvey
+  import, webhooks, digest delivery); Security & DPDP page shows "In place" vs "Before go-live" and the real deletion policy
+  (no invented history); login footer, dashboard architecture card and API safeguards only claim what exists; fake API usage
+  chart and fake app version "2.4.1" removed.
+- Team page: no crash on an empty booth list; surveyors whose booth is not in the list get a red "not in booth list" badge.
+
 **Demo-only / simulated parts (be honest with the client about these):**
 - AI interview checker transcript on the review screen is simulated (no speech-to-text yet).
 - "Demo feed" button streams generated interviews (test mode only).

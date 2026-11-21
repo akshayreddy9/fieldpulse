@@ -120,7 +120,7 @@ export default function Login() {
             ))}
           </div>
         </div>
-        <div style={{ marginTop: 32, fontSize: 12, color: '#6f86a3' }} className="row"><ShieldCheck size={14} /> DPDP-compliant · Hosted in MSR’s own AWS account in India · MSR owns all data & code</div>
+        <div style={{ marginTop: 32, fontSize: 12, color: '#6f86a3' }} className="row"><ShieldCheck size={14} /> {server?.sample || !serverMode ? 'Test site with sample data · real data will be kept in MSR’s own AWS account in India' : 'Hosted in MSR’s own AWS account in India · MSR owns all data & code'}</div>
       </div>
 
       <div className="login-form">

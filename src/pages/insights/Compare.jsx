@@ -52,9 +52,9 @@ export default function Compare() {
     table: ct.rows.map((r) => [r.label, r.base, ...r.cells.map((c) => `${c.pct.toFixed(1)}%`)]),
   });
   const pdfRound = () => exportComparePdf({
-    title: `${keyLabel(qn, rq)}: Round 3 vs Round ${prevRound}`.slice(0, 90),
-    subtitle: `${qn.title.en.replace('·', '-')} - Base R3 ${list.length}, R${prevRound} ${prev.length}`,
-    cols: ['Answer', 'Round 3', `Round ${prevRound}`, 'Change (pts)'],
+    title: `${keyLabel(qn, rq)}: this round vs Round ${prevRound}`.slice(0, 90),
+    subtitle: `${qn.title.en.replace('·', '-')} - Base this round ${list.length}, R${prevRound} ${prev.length}`,
+    cols: ['Answer', 'This round', `Round ${prevRound}`, 'Change (pts)'],
     table: cmp.map((r) => [r.label, `${r.now.toFixed(1)}%`, `${r.prev.toFixed(1)}%`, `${r.change >= 0 ? '+' : ''}${r.change.toFixed(1)}`]),
     chartRows: cmp.map((r, k) => ({ label: r.label, value: r.now, color: colorFor(rq, r.key, k) })),
   });
@@ -102,12 +102,12 @@ export default function Compare() {
           <Card>
             <div className="grid g2" style={{ gap: 10 }}>
               <div className="field"><label>Question</label><select className="select" value={rq} onChange={(e) => setRq(e.target.value)}>{choiceQs.map((q) => <option key={q.id} value={q.id}>{q.label.en}</option>)}</select></div>
-              <div className="field"><label>Compare with</label><select className="select" value={prevRound} onChange={(e) => setPrevRound(e.target.value)}><option value="2">Round 2 · August 2026 ({s.round2.length.toLocaleString('en-IN')})</option>{s.round1.length > 0 && <option value="1">Round 1 · May 2026 · GoSurvey import ({s.round1.length.toLocaleString('en-IN')})</option>}</select></div>
+              <div className="field"><label>Compare with</label><select className="select" value={prevRound} onChange={(e) => setPrevRound(e.target.value)}><option value="2">Previous round ({s.round2.length.toLocaleString('en-IN')})</option>{s.round1.length > 0 && <option value="1">Earlier round · GoSurvey import ({s.round1.length.toLocaleString('en-IN')})</option>}</select></div>
             </div>
           </Card>
           <div className="grid g-2-1">
-            <Card title={keyLabel(qn, rq, s.lang)} sub={`Round 3 vs Round ${prevRound}`}>
-              <Grouped data={cmp.map((r) => ({ label: r.label, now: Number(r.now.toFixed(1)), prev: Number(r.prev.toFixed(1)) }))} series={[{ key: 'prev', label: `Round ${prevRound}`, color: '#cbd5e1' }, { key: 'now', label: 'Round 3 (now)', color: '#0d9488' }]} height={300} fmt={(v) => `${v}%`} />
+            <Card title={keyLabel(qn, rq, s.lang)} sub={`This round vs Round ${prevRound}`}>
+              <Grouped data={cmp.map((r) => ({ label: r.label, now: Number(r.now.toFixed(1)), prev: Number(r.prev.toFixed(1)) }))} series={[{ key: 'prev', label: `Round ${prevRound}`, color: '#cbd5e1' }, { key: 'now', label: 'This round', color: '#0d9488' }]} height={300} fmt={(v) => `${v}%`} />
             </Card>
             <Card flush title="Change">
               <table className="t">

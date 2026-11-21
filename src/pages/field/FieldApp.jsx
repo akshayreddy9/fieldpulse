@@ -10,7 +10,7 @@ import { GEO, BOOTH_BY_ID, MANDAL_BY_ID, CONST_BY_ID, ageBand, defaultTargets } 
 import { isVisible } from '../../data/questionnaire.js';
 import { boothProgress, istDay } from '../../lib/analytics.js';
 import { AUDIO } from '../../lib/audio.js';
-import { A, R } from '../../lib/roles.js';
+import { A, R, targetCategories } from '../../lib/roles.js';
 import { newInterviewId } from '../../lib/outbox.js';
 
 const mmss = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
@@ -170,7 +170,7 @@ function FieldAppInner({ mode = 'preview' }) {
       id, round: 3, surveyId: s.surveyId || 'TSP-R3', surveyorId: sv.id, boothId: loc.id, mandalId: loc.mandalId, constituencyId: loc.constituencyId,
       startedAt: Date.now() - dur * 1000, durationSec: dur, gps,
       consent: { agreed: true, audio: recMode === 'real', consentRead: !(demo && skipConsent && !app), recordingSec: recMode === 'real' ? dur + 10 : 0 },
-      device: /iPhone|iPad|Mac/.test(navigator.userAgent) ? 'iOS · Pulse 2.4.1' : 'Android · Pulse 2.4.1',
+      device: /iPhone|iPad|Mac/.test(navigator.userAgent) ? 'iOS · MSR Pulse 1.0' : 'Android · MSR Pulse 1.0',
       // Photos are recorded as taken / not taken (the image itself is not uploaded yet)
       answers: {
         ...kept,
@@ -196,17 +196,21 @@ function FieldAppInner({ mode = 'preview' }) {
     const g = A({ answers: ans }, 'gender');
     const age = A({ answers: ans }, 'age');
     const c = A({ answers: ans }, 'caste');
-    if (g && tg.gender?.[g] !== undefined && (prog.gender[g] || 0) >= tg.gender[g]) w.push(g);
+    const label = (group, k) => targetCategories(qn)[group].find((o) => o.v === k)?.en || k;
+    if (g && tg.gender?.[g] !== undefined && (prog.gender[g] || 0) >= tg.gender[g]) w.push(label('gender', g));
     if (age >= 18) { const ab = ageBand(age); if (tg.age?.[ab] !== undefined && (prog.age[ab] || 0) >= tg.age[ab]) w.push(`age ${ab}`); }
-    if (c && tg.caste?.[c] !== undefined && (prog.caste[c] || 0) >= tg.caste[c]) w.push(c);
+    if (c && tg.caste?.[c] !== undefined && (prog.caste[c] || 0) >= tg.caste[c]) w.push(label('caste', c));
     return w;
   })();
   // The quota warning shows on the page that asks the quota questions
   const quotaPage = qn.groups.findIndex((g) => g.questions.some((x) => [R('gender'), R('age'), R('caste')].includes(x.id)));
+  // Shown with the answer's wording (e.g. "Female"), not its code (e.g. "F")
+  const cats = targetCategories(qn);
+  const nameOf = (group, k) => cats[group].find((o) => o.v === k)?.en || k;
   const needs = [
-    ...Object.entries(tg.gender || {}).map(([k, v]) => [k, v - (prog.gender[k] || 0)]),
+    ...Object.entries(tg.gender || {}).map(([k, v]) => [nameOf('gender', k), v - (prog.gender[k] || 0)]),
     ...Object.entries(tg.age || {}).map(([k, v]) => [`Age ${k}`, v - (prog.age[k] || 0)]),
-    ...Object.entries(tg.caste || {}).map(([k, v]) => [k, v - (prog.caste[k] || 0)]),
+    ...Object.entries(tg.caste || {}).map(([k, v]) => [nameOf('caste', k), v - (prog.caste[k] || 0)]),
   ].filter(([, v]) => v > 0);
   const savedOnline = saveResult === 'sent' && !s.outbox.some((o) => o.id === lastId);
 
@@ -262,12 +266,23 @@ function FieldAppInner({ mode = 'preview' }) {
                   <div className="small muted">{MANDAL_BY_ID[booth.mandalId].name.en} mandal · {CONST_BY_ID[booth.constituencyId].name.en}</div>
                   <div className="row mt12 nowrap"><div style={{ flex: 1 }}><Progress value={prog.pct} tone="green" /></div><span className="bold small">{prog.done} of {tg.total}</span></div>
                 </div>
-                {needs.length > 0 ? (
+                {/* One clear instruction: what to do next at this booth */}
+                {needs.length > 0 && prog.done < tg.total && (
                   <div className="fa-card" style={{ marginBottom: 0 }}>
-                    <div className="tiny bold muted row" style={{ gap: 5 }}><Target size={12} />{prog.done >= tg.total ? 'TOTAL REACHED, BUT THESE GROUPS ARE STILL SHORT' : 'STILL NEEDED AT THIS BOOTH'}</div>
-                    <div className="row mt8" style={{ gap: 6 }}>{needs.map(([k, v]) => <span key={k} className="badge amber">{k}: {v}</span>)}</div>
+                    <div className="tiny bold muted row" style={{ gap: 5 }}><Target size={12} />STILL NEEDED AT THIS BOOTH</div>
+                    <div className="row mt8" style={{ gap: 6 }}>{needs.map(([k, v]) => <span key={k} className="badge amber">{k}: {v} more</span>)}</div>
                   </div>
-                ) : <div className="callout teal small"><CheckCircle2 size={15} />All targets for this booth are complete.</div>}
+                )}
+                {needs.length > 0 && prog.done >= tg.total && (
+                  <div className="callout amber small" style={{ alignItems: 'flex-start' }}>
+                    <Target size={15} style={{ flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <b>Booth total reached ({prog.done} of {tg.total}).</b> Some groups are still short, so only interview people from these groups, and check with your supervisor first:
+                      <div className="row mt8" style={{ gap: 6 }}>{needs.map(([k, v]) => <span key={k} className="badge amber">{k}: {v} more</span>)}</div>
+                    </div>
+                  </div>
+                )}
+                {needs.length === 0 && <div className="callout teal small"><CheckCircle2 size={15} />This booth is complete. Ask your supervisor before doing more interviews here.</div>}
                 <button className="big-start" onClick={begin}><Play size={22} fill="#fff" />Start new interview</button>
                 {s.outbox.length > 0 && (
                   <div className="fa-card row" style={{ borderColor: '#fcd34d', background: '#fffbeb', marginBottom: 0 }}>

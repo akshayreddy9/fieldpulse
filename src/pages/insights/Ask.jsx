@@ -21,8 +21,8 @@ function answer(s, text, parsed) {
     const rows = compareRounds(qn, p.qid, list, applyFilters(s.round2, p.filters));
     if (!rows || !s.round2.length) return { ...p, text, qLabel, error: 'This question can’t be compared across rounds (no earlier round for it).' };
     const big = [...rows].sort((a, b) => Math.abs(b.change) - Math.abs(a.change))[0];
-    chart = <Grouped data={rows.map((r) => ({ label: r.label, prev: +r.prev.toFixed(1), now: +r.now.toFixed(1) }))} series={[{ key: 'prev', label: 'Round 2 (Aug)', color: '#cbd5e1' }, { key: 'now', label: 'Round 3 (Nov)', color: '#0d9488' }]} fmt={(v) => `${v}%`} />;
-    insight = `The biggest change since Round 2 is “${big.label}”, which moved ${big.change > 0 ? 'up' : 'down'} ${Math.abs(big.change).toFixed(1)} points to ${big.now.toFixed(1)}%.`;
+    chart = <Grouped data={rows.map((r) => ({ label: r.label, prev: +r.prev.toFixed(1), now: +r.now.toFixed(1) }))} series={[{ key: 'prev', label: 'Previous round', color: '#cbd5e1' }, { key: 'now', label: 'This round', color: '#0d9488' }]} fmt={(v) => `${v}%`} />;
+    insight = `The biggest change since the previous round is “${big.label}”, which moved ${big.change > 0 ? 'up' : 'down'} ${Math.abs(big.change).toFixed(1)} points to ${big.now.toFixed(1)}%.`;
   } else if (q.type === 'grid') {
     const f = frequency(qn, p.qid, list);
     const top = q.cols?.length || 5;

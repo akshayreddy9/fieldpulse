@@ -36,7 +36,7 @@ export default function Digest() {
         <Stat label="Interviews this day" value={todays.length} />
         <Stat label="Flagged for back-check" value={flagged.length} tone="red" hint={`${((flagged.length / (todays.length || 1)) * 100).toFixed(1)}% of the day`} />
         <Stat label="Back-checks saved" value={`~${Math.max(0, Math.round(todays.length * 0.2) - flagged.length)}`} tone="green" hint="vs. checking a random 20%" />
-        <Stat label="Sent automatically at" value={sendTime} tone="indigo" icon={Clock} hint="Every evening during fieldwork" />
+        <Stat label="Planned send time" value={sendTime} tone="indigo" icon={Clock} hint="Automatic sending not connected yet" />
       </div>
       <div className="grid g-2-1">
         <Card title="Digest by constituency" flush>
@@ -58,7 +58,7 @@ export default function Digest() {
           ))}
         </Card>
         <div className="stack">
-          <Card title="Delivery settings">
+          <Card title="Delivery settings" sub="Preview: automatic sending is not connected yet">
             <div className="stack" style={{ gap: 12 }}>
               <div className="field"><label>Send every evening at</label><input className="input" type="time" value={sendTime} onChange={(e) => setSendTime(e.target.value)} /></div>
               <div className="row small"><MessageCircle size={15} color="#16a34a" />WhatsApp to each supervisor</div>

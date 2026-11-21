@@ -44,7 +44,7 @@ export function valueLabel(qn, key, v, lang = 'en') {
   if (key === 'mandal') return MANDAL_BY_ID[v]?.name[lang] || v;
   if (key === 'booth') return BOOTH_BY_ID[v]?.short || v;
   if (key === 'ageBand') return v;
-  if (key === 'round') return v === 'R3' ? 'Round 3 (Nov)' : v === 'R2' ? 'Round 2 (Aug)' : 'Round 1 (May)';
+  if (key === 'round') return v === 'R3' ? 'This round' : v === 'R2' ? 'Previous round' : 'Earlier round (imported)';
   return optionLabel(findQuestion(qn, key), v, lang);
 }
 

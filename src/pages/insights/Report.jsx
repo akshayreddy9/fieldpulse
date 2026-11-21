@@ -116,7 +116,7 @@ export default function Report() {
           {sections.map((sec, k) => (
             <section key={sec.id}>
               <h2>{k + 1}. {sec.title}
-                {sec.source === 'ai' ? <Badge tone="indigo"><Bot size={11} />{sec.model ? 'Claude draft' : 'AI draft'}{sec.edited ? ' · edited by MSR' : ''}</Badge> : <Badge tone="teal"><UserPen size={11} />Written by MSR</Badge>}
+                {sec.source === 'ai' ? <Badge tone="indigo"><Bot size={11} />{sec.model ? 'Claude draft' : 'Automatic draft'}{sec.edited ? ' · edited by MSR' : ''}</Badge> : <Badge tone="teal"><UserPen size={11} />Written by MSR</Badge>}
               </h2>
               <div className={`body ${sec.source === 'msr' ? 'advice' : ''}`} contentEditable={s.can('insights.reports')} suppressContentEditableWarning data-placeholder={sec.placeholder}
                 onBlur={(e) => editSection(sec.id, e.currentTarget.innerText)}>{sec.body}</div>

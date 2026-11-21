@@ -49,7 +49,7 @@ export function AudioPlayer({ interview, transcript }) {
         <span className="mono small">{String(Math.floor(tsec / 60)).padStart(2, '0')}:{String(tsec % 60).padStart(2, '0')} / {Math.floor(total / 60)}:{String(total % 60).padStart(2, '0')}</span>
       </div>
       {real && <audio ref={audioRef} src={real} onTimeUpdate={(e) => setPos(e.target.currentTime / (e.target.duration || 1))} onEnded={() => setPlaying(false)} style={{ display: 'none' }} />}
-      <div className="tiny muted mt8">{real ? 'Real recording captured on this device during the demo.' : 'Recording stored encrypted in S3 (Mumbai/Hyderabad). Waveform shown; green = consent segment.'}</div>
+      <div className="tiny muted mt8">{real ? 'Real recording captured on this device during the demo.' : 'Preview: recordings stay on the surveyor’s phone for now (upload to MSR’s secure storage is planned). The waveform and transcript here are simulated; green = consent segment.'}</div>
       {transcript && (
         <div className="mt12" style={{ maxHeight: 260, overflowY: 'auto' }}>
           {transcript.map((l, k) => (

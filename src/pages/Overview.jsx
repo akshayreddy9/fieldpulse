@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, CartesianGrid } from 'recharts';
 import {
   FileEdit, Smartphone, Radar, BarChart3, FileText, ArrowRight, XCircle, CheckCircle2, Cloud, Database, Cpu, Lock, ShieldCheck,
-  WifiOff, Server, Sparkles, Users, HardDrive, Activity,
+  WifiOff, Server, Sparkles, Users, HardDrive, Activity, BellRing,
 } from 'lucide-react';
 import { useStore } from '../store.jsx';
 import { Card, PageHead } from '../components/ui.jsx';
@@ -43,13 +43,35 @@ export default function Overview() {
   }, [s.interviews]);
   const mainId = mainQuestionId(s.questionnaire);
   const vote = useMemo(() => frequency(s.questionnaire, mainId, s.valid)?.rows || [], [s.questionnaire, mainId, s.valid]);
+  const survey = s.surveys?.find((x) => x.id === s.surveyId);
+  const isToday = today === istDay(Date.now());
+
+  // Things an admin should act on, most urgent first: [tone, text, link]
+  const attention = useMemo(() => {
+    const out = [];
+    const booths = ru.children.flatMap((c) => c.children.flatMap((m) => m.children));
+    const behind = booths.filter((b) => b.target && b.pct < 50).length;
+    const team = s.surveyors.filter((x) => x.role === 'Surveyor' && x.status !== 'Inactive' && (x.boothIds || []).length);
+    const activeToday = new Set(s.interviews.filter((i) => istDay(i.startedAt) === istDay(Date.now())).map((i) => i.surveyorId));
+    const idle = team.filter((x) => !activeToday.has(x.id)).length;
+    if (flaggedOpen) out.push(['red', <><b>{flaggedOpen}</b> flagged interviews are waiting for review</>, '/live/alerts']);
+    if (behind) out.push(['amber', <><b>{behind}</b> booths are below 50% of their quota</>, '/admin/targets']);
+    if (survey?.status === 'Live' && team.length && idle) out.push(['amber', <><b>{idle}</b> of {team.length} surveyors have not sent an interview today</>, '/live']);
+    if (GEO.sample) out.push(['blue', <>The <b>sample booth list</b> is in use. Upload MSR’s real booth list before real fieldwork</>, '/admin/booths']);
+    if (GEO.empty) out.push(['red', <>No booth list yet. Surveyors cannot start until it is uploaded</>, '/admin/booths']);
+    if (s.draftQuestionnaire) out.push(['blue', <>The questionnaire has <b>unpublished changes</b></>, '/admin/builder']);
+    if (!mainId) out.push(['blue', <>No question is marked as <b>Main result</b>. Mark one in the questionnaire builder for headline charts and the report</>, '/admin/builder']);
+    if (survey?.status === 'Draft') out.push(['blue', <>This survey is still a <b>Draft</b>. Surveyors cannot see it until fieldwork starts</>, '/admin/surveys']);
+    if (s.reportStatus === 'Approved') out.push(['blue', <>The client report is approved but <b>not sent</b> to the client yet</>, '/insights/report']);
+    return out;
+  }, [flaggedOpen, ru, s.surveyors, s.interviews, survey, s.draftQuestionnaire, mainId, s.reportStatus]);
 
   return (
     <div className="stack" style={{ gap: 20 }}>
       <div className="hero">
         <div className="row" style={{ alignItems: 'flex-start' }}>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div className="tiny" style={{ color: '#5eead4', fontWeight: 700, letterSpacing: '.08em' }}>LIVE SURVEY{s.questionnaire.client ? ` · ${s.questionnaire.client.toUpperCase()}` : ''}</div>
+            <div className="tiny" style={{ color: '#5eead4', fontWeight: 700, letterSpacing: '.08em' }}>{({ Live: 'FIELDWORK LIVE', Draft: 'DRAFT SURVEY', Closed: 'CLOSED SURVEY' })[survey?.status] || 'SURVEY'}{s.questionnaire.client ? ` · ${s.questionnaire.client.toUpperCase()}` : ''}</div>
             <h2 className="mt8">{s.questionnaire.title.en}</h2>
             <p>{GEO.constituencies.length} constituencies · {GEO.mandals.length} mandals · {GEO.booths.length} booths · {s.surveyors.filter((x) => x.role === 'Surveyor').length} surveyors in the field</p>
           </div>
@@ -57,29 +79,26 @@ export default function Overview() {
         </div>
         <div className="kpis">
           <div className="kpi"><div className="v">{s.interviews.length.toLocaleString('en-IN')}</div><div className="l">Interviews of {ru.target.toLocaleString('en-IN')} target ({ru.pct.toFixed(0)}%)</div></div>
-          <div className="kpi"><div className="v">{todayCount}</div><div className="l">Collected today</div></div>
+          <div className="kpi"><div className="v">{isToday ? todayCount : 0}</div><div className="l">Collected today{!isToday && today ? ` (last fieldwork ${new Date(today).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}: ${todayCount})` : ''}</div></div>
           <div className="kpi"><div className="v">{boothsOnTrack}/{GEO.booths.length}</div><div className="l">Booths at 75%+ of quota</div></div>
           <div className="kpi"><div className="v" style={{ color: flaggedOpen ? '#fda4af' : '#86efac' }}>{flaggedOpen}</div><div className="l">Flagged interviews awaiting review</div></div>
         </div>
       </div>
 
-      <div>
-        <PageHead eyebrow="How MSR Pulse works" title="Five steps, one system" desc="Click any step to open that module. Everything is connected: an interview collected in the field app appears on the live map, in quality alerts, in results and in the client report within seconds of syncing." />
-        <div className="flow-steps">
-          {STEPS.map((st) => (
-            <div key={st.n} className="flow-step" onClick={() => nav(st.to)}>
-              <div className="ico" style={{ background: st.c[0], color: st.c[1] }}><st.icon size={20} /></div>
-              <div className="n">STEP {st.n} · {st.m.toUpperCase()}</div>
-              <h4>{st.t}</h4>
-              <div className="small muted mt8">{st.d}</div>
-              <div className="small bold mt12 row" style={{ color: st.c[1], gap: 4 }}>Open <ArrowRight size={13} /></div>
+      <Card title={<span className="row"><BellRing size={16} />Needs your attention</span>} sub="Click an item to open it" flush>
+        {attention.length === 0
+          ? <div className="row small" style={{ padding: 16 }}><CheckCircle2 size={16} color="#16a34a" />All clear: nothing is waiting for you.</div>
+          : attention.map(([tone, text, to]) => (
+            <div key={text} className="list-item click" onClick={() => nav(to)}>
+              <span style={{ width: 8, height: 8, borderRadius: 99, background: { red: '#e11d48', amber: '#f59e0b', blue: '#2563eb' }[tone], flexShrink: 0 }} />
+              <div className="small" style={{ flex: 1 }}>{text}</div>
+              <ArrowRight size={14} className="faint" />
             </div>
           ))}
-        </div>
-      </div>
+      </Card>
 
       <div className="grid g-2-1">
-        <Card title="Interviews collected per day" sub="All booths, Round 3 fieldwork">
+        <Card title="Interviews collected per day" sub="All booths, this survey">
           <div style={{ height: 240 }}>
             <ResponsiveContainer>
               <AreaChart data={perDay} margin={{ top: 10, right: 10, left: -18, bottom: 0 }}>
@@ -109,6 +128,21 @@ export default function Overview() {
         </Card>
       </div>
 
+      <div>
+        <PageHead eyebrow="How MSR Pulse works" title="Five steps, one system" desc="Click a step to open it. An interview collected on a phone appears on the live map, in quality alerts, in results and in the client report within seconds of syncing." />
+        <div className="flow-steps">
+          {STEPS.map((st) => (
+            <div key={st.n} className="flow-step" onClick={() => nav(st.to)}>
+              <div className="ico" style={{ background: st.c[0], color: st.c[1] }}><st.icon size={20} /></div>
+              <div className="n">STEP {st.n} · {st.m.toUpperCase()}</div>
+              <h4>{st.t}</h4>
+              <div className="small muted mt8">{st.d}</div>
+              <div className="small bold mt12 row" style={{ color: st.c[1], gap: 4 }}>Open <ArrowRight size={13} /></div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <Card title="The problems MSR Pulse solves" sub="From the MSR requirements">
         <div className="stack" style={{ gap: 10 }}>
           {PROBLEMS.map(([before, after]) => (
@@ -120,26 +154,27 @@ export default function Overview() {
         </div>
       </Card>
 
-      <Card title="Architecture · runs in MSR’s own AWS account, all data in India" sub="Production design delivered at handover, with full source code">
+      <Card title="Architecture" sub="Green tags are working today; grey tags are planned before go-live">
         <div className="grid g4">
           {[
-            [Smartphone, 'Pulse Field app', 'iPhone + Android (one codebase). Encrypted on-device store, works fully offline, syncs when signal returns.', ['Offline', 'AES-256 on device']],
-            [Cloud, 'Secure API', 'API Gateway + containers on AWS ap-south-2 (Hyderabad). SMS one-time-code login, role-based access.', ['TLS 1.3', 'OTP login']],
-            [Database, 'Data & recordings', 'PostgreSQL for answers; S3 for audio and photos. Encrypted with MSR-owned KMS keys. Scheduled PII deletion.', ['KMS', 'Backups in India']],
-            [Cpu, 'Quality + AI', 'Quality engine scores every interview on sync; evening digest at 7 PM. AI drafting and transcription run inside India.', ['Same-evening alerts', 'Telugu + English']],
-          ].map(([I, t, d, tags]) => (
+            // [icon, title, what it is, built today, comes at go-live]
+            [Smartphone, 'Pulse Field app', 'Android app and iPhone web app from one codebase. Works fully offline; each interview stays in the phone’s database until the server confirms it.', ['Offline', 'Consent + GPS'], ['On-device encryption', 'iPhone App Store app']],
+            [Cloud, 'Server', 'Containers on one AWS server with automatic HTTPS. Mobile number + SMS code login, role-based access checked on the server.', ['HTTPS', 'Role-based access'], ['MSR’s own AWS account, Mumbai', 'Real SMS gateway']],
+            [Database, 'Data & backups', 'Encrypted database on an encrypted disk with an MSR-owned key; nightly encrypted backups. Personal details deleted on schedule.', ['KMS encryption', 'Nightly backups'], ['Recordings & photos to S3']],
+            [Cpu, 'Quality + AI', 'Nine quality checks score every interview as it syncs. AI drafts the report from totals only, never personal details.', ['Same-day flags', 'AI report draft'], ['Telugu transcription', 'Digest by SMS / email']],
+          ].map(([I, t, d, built, later]) => (
             <div key={t} className="card" style={{ padding: 16, boxShadow: 'none' }}>
               <div className="q-type-ico"><I size={16} /></div>
               <div className="bold mt8">{t}</div>
               <div className="small muted mt8">{d}</div>
-              <div className="row mt12">{tags.map((x) => <span key={x} className="badge teal">{x}</span>)}</div>
+              <div className="row mt12">{built.map((x) => <span key={x} className="badge teal">{x}</span>)}{later.map((x) => <span key={x} className="badge" title="Planned for go-live">{x} · planned</span>)}</div>
             </div>
           ))}
         </div>
         <div className="row mt16 small muted" style={{ gap: 16 }}>
           <span className="row" style={{ gap: 6 }}><WifiOff size={14} />Offline-first field app</span>
           <span className="row" style={{ gap: 6 }}><Lock size={14} />Encrypted at rest & in transit</span>
-          <span className="row" style={{ gap: 6 }}><ShieldCheck size={14} />CERT-In audited before launch</span>
+          <span className="row" style={{ gap: 6 }}><ShieldCheck size={14} />CERT-In audit before launch</span>
           <span className="row" style={{ gap: 6 }}><Users size={14} />No limit on surveyors or phones</span>
           <span className="row" style={{ gap: 6 }}><Server size={14} />MSR owns data, code & system</span>
           <span className="row" style={{ gap: 6 }}><HardDrive size={14} />Source code handed over</span>

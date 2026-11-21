@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Building2, FileDown, Lock, BarChart3, FileText, CalendarClock, CheckCircle2 } from 'lucide-react';
 import { useStore } from '../store.jsx';
-import { PageHead, Card, Badge, Stat, Empty, Tabs } from '../components/ui.jsx';
+import { PageHead, Card, Badge, Stat, Empty, Tabs, Progress } from '../components/ui.jsx';
 import { QuestionResult } from './insights/Results.jsx';
 import { useReportCharts, ReportChart } from './insights/Report.jsx';
 import { exportReportPdf } from '../lib/exporters.js';
 import { GEO } from '../data/geo.js';
 import { findQuestion, allQuestions } from '../data/questionnaire.js';
-import { freqRows } from '../lib/analytics.js';
+import { freqRows, rollup } from '../lib/analytics.js';
 import { mainQuestionId, isRealChoice } from '../lib/reportGen.js';
 import { rolesOf, piiQuestions } from '../lib/roles.js';
 
@@ -18,6 +18,7 @@ export default function ClientPortal() {
   const sent = s.reportStatus === 'Sent to client' && s.report;
   const isClient = s.user.role === 'client';
   const qn = s.questionnaire;
+  const ru = rollup(s.valid, s.targets);
   const mainId = mainQuestionId(qn);
   const lead = freqRows(qn, mainId, s.valid).filter(isRealChoice).sort((a, b) => b.pct - a.pct)[0];
   // Key results: the marked headline questions, or else the first few non-personal questions
@@ -51,7 +52,16 @@ export default function ClientPortal() {
           ))}
         </div>
       ) : (
-        <Card><Empty icon={Lock} title="Your report is being prepared">MSR is finalising the Round 3 report. It will appear here as soon as it is approved{!isClient && ' (Report studio → Approve → Send to client)'}.</Empty></Card>
+        <div className="stack">
+          <div className="callout blue small"><Lock size={15} style={{ flexShrink: 0 }} /><div><b>Your report is being prepared.</b> It will appear here as soon as MSR approves it{!isClient && ' (Report studio → Approve → Send to client)'}. Meanwhile you can follow the fieldwork below.</div></div>
+          <Card title="Fieldwork progress" sub="Quality-checked interviews against the agreed sample, updated live">
+            <div className="row nowrap"><div style={{ flex: 1 }}><Progress value={Math.min(100, ru.pct)} tone="green" /></div><b>{ru.n.toLocaleString('en-IN')} of {ru.target.toLocaleString('en-IN')}</b><span className="small muted">({Math.min(100, ru.pct).toFixed(0)}%)</span></div>
+            <table className="t mt12">
+              <thead><tr><th>Constituency</th><th className="num">Interviews</th><th style={{ width: '45%' }}>Progress</th></tr></thead>
+              <tbody>{ru.children.map((c) => <tr key={c.id}><td className="bold small">{c.name.en}</td><td className="num">{c.n.toLocaleString('en-IN')} / {c.target.toLocaleString('en-IN')}</td><td><Progress value={Math.min(100, c.pct)} sm /></td></tr>)}</tbody>
+            </table>
+          </Card>
+        </div>
       ))}
       {tab === 'results' && (
         <>

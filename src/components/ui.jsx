@@ -169,6 +169,17 @@ export function PII({ value, kind = 'name', interviewId, question }) {
   );
 }
 
+// Marks a screen or part of one that shows how a feature WILL work, with simulated data (not connected yet).
+// Used so testers and clients never mistake a demonstration for a working feature.
+export function PreviewNote({ children, style }) {
+  return (
+    <div className="callout amber small" style={{ marginBottom: 12, ...style }}>
+      <Info size={15} style={{ flexShrink: 0, marginTop: 2 }} />
+      <div><b>Preview · not connected yet.</b> {children}</div>
+    </div>
+  );
+}
+
 export function Empty({ icon: Icon, title, children }) {
   return (
     <div className="empty">
