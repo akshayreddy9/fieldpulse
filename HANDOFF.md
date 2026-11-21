@@ -29,9 +29,13 @@ Survey platform for field opinion polls (Telangana).
 **Stack:** React 18 + Vite, Node 24 Express + node:sqlite, SSE, Capacitor 7 Android, AWS EC2 + Docker + Caddy.
 
 ## AWS: ALL DELETED (2026-11-21)
-- Stack  deleted, and the retained disk, S3 bucket and SSM password were deleted by hand. The KMS key is scheduled for deletion on 2026-11-28. The test site is gone.
-- Nothing billable is left in ap-southeast-2 or us-east-1. To bring it back: deploy  again (see docs/DEPLOY-AWS.md); the database starts fresh.
-- Sign-in, if needed: .
+- **Deleted:**
+  - stack `msr-pulse`;
+  - by hand: the retained disk, S3 bucket and SSM password.
+- The KMS key is scheduled for deletion on 2026-11-28. The test site is gone.
+- Nothing billable is left in ap-southeast-2 or us-east-1.
+- **To bring it back:** deploy `deploy/aws/msr-pulse-aws.yaml` again (see docs/DEPLOY-AWS.md). The database starts fresh.
+- **Sign-in, if needed:** `aws login --profile msr-pulse --region ap-southeast-2`
 
 ## GitHub
 - Public repo: https://github.com/akshayreddy9/fieldpulse (branch main only; commit email = GitHub noreply). The README brands it "FieldPulse"; the app screens still say MSR Pulse (owner: don't rename and no licence for now).
